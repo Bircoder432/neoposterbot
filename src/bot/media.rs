@@ -1,8 +1,8 @@
 use anyhow::Result;
 use teloxide::prelude::*;
 use teloxide::types::{
-    InputFile, InputMedia, InputMediaAudio, InputMediaPhoto, InputMediaVideo, LinkPreviewOptions,
-    Message as TgMessage, MessageId, ParseMode, ReplyParameters,
+    FileId, InputFile, InputMedia, InputMediaAudio, InputMediaPhoto, InputMediaVideo,
+    LinkPreviewOptions, Message as TgMessage, MessageId, ParseMode, ReplyParameters,
 };
 
 use crate::db::models::{Message, Proposal};
@@ -10,25 +10,25 @@ use crate::locales::{L10n, Locale};
 
 pub fn extract_media_info(msg: &TgMessage, _lang: Locale) -> (String, String) {
     if let Some(photo) = msg.photo().and_then(|p| p.last()) {
-        return ("photo".into(), photo.file.id.clone());
+        return ("photo".into(), photo.file.id.to_string());
     }
     if let Some(doc) = msg.document() {
-        return ("document".into(), doc.file.id.clone());
+        return ("document".into(), doc.file.id.to_string());
     }
     if let Some(video) = msg.video() {
-        return ("video".into(), video.file.id.clone());
+        return ("video".into(), video.file.id.to_string());
     }
     if let Some(audio) = msg.audio() {
-        return ("audio".into(), audio.file.id.clone());
+        return ("audio".into(), audio.file.id.to_string());
     }
     if let Some(voice) = msg.voice() {
-        return ("voice".into(), voice.file.id.clone());
+        return ("voice".into(), voice.file.id.to_string());
     }
     if let Some(sticker) = msg.sticker() {
-        return ("sticker".into(), sticker.file.id.clone());
+        return ("sticker".into(), sticker.file.id.to_string());
     }
     if let Some(vn) = msg.video_note() {
-        return ("video_note".into(), vn.file.id.clone());
+        return ("video_note".into(), vn.file.id.to_string());
     }
     ("text".into(), String::new())
 }
@@ -75,7 +75,7 @@ pub fn escape_html(s: &str) -> String {
 }
 
 fn input_file(file_id: &str) -> InputFile {
-    InputFile::file_id(file_id.to_string())
+    InputFile::file_id(FileId(file_id.to_string()))
 }
 
 fn disabled_preview_options() -> LinkPreviewOptions {
@@ -169,7 +169,6 @@ fn build_input_media(msg: &Message, is_first: bool, with_html: bool) -> InputMed
     } else {
         None
     };
-
     let mut builder = match msg.media_type.as_str() {
         "video" => InputMediaBuilder::Video(InputMediaVideo::new(file)),
         "audio" => InputMediaBuilder::Audio(InputMediaAudio::new(file)),
@@ -182,7 +181,6 @@ fn build_input_media(msg: &Message, is_first: bool, with_html: bool) -> InputMed
             builder = builder.parse_mode(ParseMode::Html);
         }
     }
-
     builder.build()
 }
 
@@ -200,7 +198,6 @@ impl InputMediaBuilder {
             Self::Audio(b) => Self::Audio(b.caption(caption)),
         }
     }
-
     fn parse_mode(self, mode: ParseMode) -> Self {
         match self {
             Self::Photo(b) => Self::Photo(b.parse_mode(mode)),
@@ -208,7 +205,6 @@ impl InputMediaBuilder {
             Self::Audio(b) => Self::Audio(b.parse_mode(mode)),
         }
     }
-
     fn build(self) -> InputMedia {
         match self {
             Self::Photo(b) => InputMedia::Photo(b),
@@ -223,11 +219,14 @@ pub async fn publish(
     channel_id: i64,
     proposal: &Proposal,
     bot_username: &str,
+    watermark_username: &str,
+    is_pro: bool,
     reply_to: Option<i32>,
     lang: Locale,
 ) -> Result<Option<i32>> {
     let first = proposal.first();
     let escaped_text = escape_html(&first.message_text);
+
     let quoted = format!("<blockquote>{escaped_text}</blockquote>");
 
     let is_reply = first.parent_message_id.is_some();
@@ -242,8 +241,12 @@ pub async fn publish(
         "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{}\">{reply_text}</a>",
         first.id
     );
-    let caption = format!("{base}{reply_link}");
-
+    let watermark = if is_pro {
+        ""
+    } else {
+        &L10n::make_by(lang, watermark_username)
+    };
+    let caption = format!("{base}\n<i>{watermark}</i>{reply_link}");
     if proposal.messages.len() == 1 {
         publish_single(bot, channel_id, first, &caption, reply_to).await
     } else {
@@ -350,7 +353,6 @@ async fn publish_single(
             }
         }
     };
-
     Ok(Some(sent.id.0))
 }
 

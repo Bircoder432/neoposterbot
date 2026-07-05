@@ -1,19 +1,21 @@
 [package]
-name = "posterbot"
-version = "0.2.0"
+name = "posterbot_constructor"
+version = "0.3.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94.1"
 
 [dependencies]
-teloxide = { version = "0.13", default-features = false, features = ["rustls", "ctrlc_handler", "macros"] }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "chrono", "migrate"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+teloxide = { git = "https://github.com/teloxide/teloxide", default-features = false, features = ["rustls", "ctrlc_handler", "macros"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "macros", "chrono", "migrate", "tls-rustls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dotenvy = "0.15"
 anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+dashmap = "6.1"
+url = "2.5"
 
 [dev-dependencies]
 tempfile = "3"

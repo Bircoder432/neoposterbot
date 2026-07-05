@@ -1,10 +1,25 @@
 services:
-  posterbot:
+  db:
+    image: postgres:16-alpine
+    container_name: posterbot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: botuser
+      POSTGRES_PASSWORD: botpass
+      POSTGRES_DB: posterbot
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  constructor_bot:
     build: .
-    container_name: posterbot
+    container_name: posterbot_constructor
     restart: unless-stopped
     env_file: .env
-    volumes:
-      - ./data/bot.db:/app/data/bot.db
+    depends_on:
+      - db
     environment:
-      - RUST_LOG=posterbot=info,teloxide=info
+      - RUST_LOG=posterbot_constructor=info,teloxide=info
+      - DATABASE_URL=postgres://botuser:botpass@db:5432/posterbot
+
+volumes:
+  pgdata:

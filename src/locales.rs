@@ -51,13 +51,6 @@ impl L10n {
         }
     }
 
-    pub fn already_owner(l: Locale) -> &'static str {
-        match l {
-            Locale::En => "❌ You are already the owner.",
-            Locale::Ru => "❌ Вы уже являетесь владельцем бота.",
-        }
-    }
-
     pub fn admin_already_exists(l: Locale, id: i64) -> String {
         match l {
             Locale::En => format!("❌ User {id} is already an admin."),
@@ -96,13 +89,6 @@ impl L10n {
             Locale::Ru => {
                 "📝 Использование: /removeadmin <ID_пользователя>\n\nПример: /removeadmin 123456789"
             }
-        }
-    }
-
-    pub fn cannot_remove_owner(l: Locale) -> &'static str {
-        match l {
-            Locale::En => "❌ Cannot remove the owner.",
-            Locale::Ru => "❌ Нельзя удалить владельца бота.",
         }
     }
 
@@ -347,18 +333,22 @@ impl L10n {
     pub fn owner_panel(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "👑 Owner Panel\n\nCommands:\n/addadmin <ID>\n/removeadmin <ID>\n/admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/lang <en|ru>"
+                "👑 Owner Panel\n\nCommands:\n/addadmin <ID>\n/removeadmin <ID>\n/admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
             }
             Locale::Ru => {
-                "👑 Панель владельца\n\nКоманды:\n/addadmin <ID>\n/removeadmin <ID>\n/admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/lang <en|ru>"
+                "👑 Панель владельца\n\nКоманды:\n/addadmin <ID>\n/removeadmin <ID>\n/admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
             }
         }
     }
 
     pub fn mod_panel(l: Locale) -> &'static str {
         match l {
-            Locale::En => "🛠️ Moderator Panel\n\nCommands:\n/proposals",
-            Locale::Ru => "🛠️ Панель модератора\n\nКоманды:\n/proposals",
+            Locale::En => {
+                "🛠️ Moderator Panel\n\nCommands:\n/proposals\n/banned\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+            }
+            Locale::Ru => {
+                "🛠️ Панель модератора\n\nКоманды:\n/proposals\n/banned\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+            }
         }
     }
 
@@ -544,10 +534,33 @@ impl L10n {
             Locale::Ru => "✅ Язык изменен на Русский.",
         }
     }
+
     pub fn reply_link_text(l: Locale) -> &'static str {
         match l {
             Locale::En => "💬 Reply",
             Locale::Ru => "💬 Ответить",
+        }
+    }
+
+    pub fn free_limit_admins(l: Locale) -> &'static str {
+        match l {
+            Locale::En => {
+                "❌ Free plan limit reached: you can only add 1 moderator. Please upgrade your plan."
+            }
+            Locale::Ru => {
+                "❌ Достигнут лимит бесплатного тарифа: можно добавить только 1 модератора. Пожалуйста, улучшите тариф."
+            }
+        }
+    }
+
+    pub fn make_by(l: Locale, username: &str) -> String {
+        match l {
+            Locale::En => {
+                format!("make by {username}")
+            }
+            Locale::Ru => {
+                format!("сделано с помощью {username}")
+            }
         }
     }
 }
