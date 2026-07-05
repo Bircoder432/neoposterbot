@@ -246,7 +246,7 @@ pub async fn publish(
     } else {
         &L10n::make_by(lang, watermark_username)
     };
-    let caption = format!("{base}\n<i>{watermark}</i>{reply_link}");
+    let caption = format!("{base}<i>{watermark}</i>{reply_link}");
     if proposal.messages.len() == 1 {
         publish_single(bot, channel_id, first, &caption, reply_to).await
     } else {

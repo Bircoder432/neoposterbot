@@ -556,10 +556,10 @@ impl L10n {
     pub fn make_by(l: Locale, username: &str) -> String {
         match l {
             Locale::En => {
-                format!("make by {username}")
+                format!("\nmake by {username}")
             }
             Locale::Ru => {
-                format!("сделано с помощью {username}")
+                format!("\nсделано с помощью {username}")
             }
         }
     }
