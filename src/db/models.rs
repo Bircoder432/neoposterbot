@@ -19,6 +19,8 @@ pub struct BotConfig {
     pub channel_id: i64,
     pub lang: String,
     pub active: bool,
+    pub setup_complete: bool,
+    pub setup_code: Option<String>,
     pub client_tg_id: Option<i64>,
 }
 
@@ -60,6 +62,7 @@ pub struct Admin {
     pub bot_id: i32,
     pub user_id: i64,
     pub user_name: String,
+    pub frozen: bool,
 }
 
 #[derive(Debug, Clone, FromRow)]

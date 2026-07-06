@@ -563,4 +563,65 @@ impl L10n {
             }
         }
     }
+    pub fn setup_checking(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🔍 Checking admin rights...",
+            Locale::Ru => "🔍 Проверка прав администратора...",
+        }
+    }
+
+    pub fn setup_not_admin(l: Locale) -> &'static str {
+        match l {
+            Locale::En => {
+                "❌ I am not an administrator in this channel. Please add me and try again."
+            }
+            Locale::Ru => {
+                "❌ Я не являюсь администратором в этом канале. Пожалуйста, добавьте меня и попробуйте снова."
+            }
+        }
+    }
+
+    pub fn setup_chat_not_found(l: Locale) -> &'static str {
+        match l {
+            Locale::En => {
+                "❌ Channel not found. Make sure it is public or send the correct ID (-100...)."
+            }
+            Locale::Ru => {
+                "❌ Канал не найден. Убедитесь, что он публичный, или отправьте корректный ID (-100...)."
+            }
+        }
+    }
+
+    pub fn setup_success(l: Locale, channel_name: &str) -> String {
+        match l {
+            Locale::En => format!(
+                "✅ Setup complete! Channel '{}' linked successfully. Use /start to see the panel.",
+                channel_name
+            ),
+            Locale::Ru => format!(
+                "✅ Настройка завершена! Канал '{}' успешно привязан. Отправьте /start, чтобы открыть панель.",
+                channel_name
+            ),
+        }
+    }
+
+    pub fn setup_enter_channel(l: Locale) -> &'static str {
+        match l {
+            Locale::En => {
+                "➕ Now, please add the bot to your Telegram channel as an administrator."
+            }
+            Locale::Ru => "➕ Теперь добавьте бота в ваш Telegram-канал как администратора.",
+        }
+    }
+
+    pub fn admin_added_frozen(l: Locale, name: &str) -> String {
+        match l {
+            Locale::En => format!(
+                "✅ User {name} added as moderator, but ❄️ FROZEN.\n\nYou have reached the Free plan limit. Upgrade to Pro to unfreeze moderators."
+            ),
+            Locale::Ru => format!(
+                "✅ Пользователь {name} добавлен как модератор, но ❄️ ЗАМОРОЖЕН.\n\nВы достигли лимита бесплатного тарифа. Обновите до Pro, чтобы разморозить модераторов."
+            ),
+        }
+    }
 }

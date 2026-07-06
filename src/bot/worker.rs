@@ -2,6 +2,7 @@ use anyhow::{Result, anyhow};
 use std::sync::Arc;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage};
+use tokio::sync::RwLock;
 
 use crate::bot::media;
 use crate::config::Config;
@@ -11,7 +12,9 @@ use crate::locales::{L10n, Locale};
 
 #[derive(Clone)]
 pub struct WorkerState {
-    pub bot_config: crate::db::models::BotConfig,
+    pub bot_id: i32,
+    pub client_tg_id: i64,
+    pub config: Arc<RwLock<crate::db::models::BotConfig>>,
     pub db: Database,
     pub master_config: Arc<Config>,
 }
@@ -22,14 +25,20 @@ pub async fn run_worker_bot(
     db: Database,
     master_config: Arc<Config>,
 ) -> Result<()> {
+    let bot_id = bot_config.id;
+    let client_tg_id = bot_config.client_tg_id.unwrap_or(0);
+
     let state = WorkerState {
-        bot_config,
+        bot_id,
+        client_tg_id,
+        config: Arc::new(RwLock::new(bot_config)),
         db,
         master_config,
     };
 
     let handler = dptree::entry()
         .branch(Update::filter_message().endpoint(handle_message))
+        .branch(Update::filter_channel_post().endpoint(handle_channel_post))
         .branch(Update::filter_callback_query().endpoint(handle_callback));
 
     let mut dispatcher = Dispatcher::builder(bot, handler)
@@ -57,12 +66,29 @@ async fn handle_callback(bot: Bot, q: CallbackQuery, state: WorkerState) -> Resp
     Ok(())
 }
 
+async fn handle_channel_post(bot: Bot, post: Message, state: WorkerState) -> ResponseResult {
+    if let Err(e) = process_channel_post(&bot, &post, &state).await {
+        tracing::error!(error = %e, "Channel post handler error");
+    }
+    Ok(())
+}
+
 async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let Some(from) = &msg.from else {
         return Ok(());
     };
     let user_id = from.id.0 as i64;
-    let bot_id = state.bot_config.id;
+    let bot_id = state.bot_id;
+
+    let setup_complete = state.db.is_setup_complete(bot_id).await?;
+
+    // --- ФАЗА ПЕРВОНАЧАЛЬНОЙ НАСТРОЙКИ ---
+    if !setup_complete {
+        if user_id != state.client_tg_id {
+            return Ok(()); // Настройку может делать только владелец
+        }
+        return handle_setup(bot, msg, state).await;
+    }
 
     if msg.text().is_some_and(|t| t.starts_with('/')) {
         return dispatch_command(bot, msg, state).await;
@@ -80,6 +106,86 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     }
 
     handle_proposal(bot, msg, state).await
+}
+
+// --- SETUP LOGIC ---
+async fn handle_setup(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
+    let text = msg.text().unwrap_or("");
+    let bot_id = state.bot_id;
+
+    if text.starts_with("/start") {
+        let kb = InlineKeyboardMarkup::new(vec![vec![
+            InlineKeyboardButton::callback("🇷🇺 Русский", "setup_lang_ru"),
+            InlineKeyboardButton::callback("🇬🇧 English", "setup_lang_en"),
+        ]]);
+        bot.send_message(msg.chat.id, "👋 Давайте настроим вашего бота!\n\nPlease select your language:\n\nПожалуйста, выберите язык:").reply_markup(kb).await?;
+        return Ok(());
+    }
+
+    let lang = state.db.get_language(bot_id).await?;
+
+    if let Some(code) = state.db.get_setup_code(bot_id).await? {
+        bot.send_message(
+            msg.chat.id,
+            format!(
+                "{}\n\nОтправьте в ваш канал команду:\n<code>/connect {}</code>",
+                L10n::setup_enter_channel(lang),
+                code
+            ),
+        )
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .await?;
+    } else {
+        let kb = InlineKeyboardMarkup::new(vec![vec![
+            InlineKeyboardButton::callback("🇷🇺 Русский", "setup_lang_ru"),
+            InlineKeyboardButton::callback("🇬🇧 English", "setup_lang_en"),
+        ]]);
+        bot.send_message(
+            msg.chat.id,
+            "👋 Please select your language:\n\nПожалуйста, выберите язык:",
+        )
+        .reply_markup(kb)
+        .await?;
+    }
+    Ok(())
+}
+
+async fn process_channel_post(bot: &Bot, post: &Message, state: &WorkerState) -> R {
+    let setup_complete = state.db.is_setup_complete(state.bot_id).await?;
+    if setup_complete {
+        return Ok(());
+    }
+
+    let text = post.text().unwrap_or("").to_lowercase();
+    if let Some(code_provided) = text.strip_prefix("/connect ") {
+        let code_provided = code_provided.trim();
+        if let Some(expected_code) = state.db.get_setup_code(state.bot_id).await? {
+            if expected_code.to_lowercase() == code_provided {
+                let channel_id = post.chat.id.0;
+                let channel_name = post.chat.title().unwrap_or("Канал").to_string();
+                state.db.complete_setup(state.bot_id, channel_id).await?;
+
+                // МАГИЯ ЗДЕСЬ: Обновляем конфиг прямо в памяти Воркера!
+                let mut cfg = state.config.write().await;
+                cfg.channel_id = channel_id;
+                cfg.setup_complete = true;
+                cfg.setup_code = None;
+                drop(cfg); // Отпускаем лок
+
+                bot.delete_message(post.chat.id, post.id).await.ok();
+
+                if state.client_tg_id != 0 {
+                    let lang = state.db.get_language(state.bot_id).await?;
+                    bot.send_message(
+                        ChatId(state.client_tg_id),
+                        L10n::setup_success(lang, &channel_name),
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
@@ -110,19 +216,19 @@ async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if let Some(parent_id_str) = args.strip_prefix("reply_") {
         if let Ok(parent_id) = parent_id_str.parse::<i64>() {
             if state
                 .db
-                .get_message_by_id(state.bot_config.id, parent_id)
+                .get_message_by_id(state.bot_id, parent_id)
                 .await?
                 .is_some()
             {
                 state
                     .db
-                    .set_user_state(state.bot_config.id, user_id, "reply_mode", parent_id)
+                    .set_user_state(state.bot_id, user_id, "reply_mode", parent_id)
                     .await?;
                 bot.send_message(chat_id, L10n::send_reply_to_post(lang))
                     .await?;
@@ -134,16 +240,17 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
         return Ok(());
     }
 
-    if state.db.is_banned(state.bot_config.id, user_id).await? {
+    if state.db.is_banned(state.bot_id, user_id).await? {
         bot.send_message(chat_id, L10n::user_banned(lang)).await?;
         return Ok(());
     }
 
-    // ПРОВЕРКА РОЛИ
-    if state.bot_config.client_tg_id.unwrap_or(0) == user_id {
-        bot.send_message(chat_id, L10n::owner_panel(lang)).await?;
-    } else if state.db.is_admin(state.bot_config.id, user_id).await? {
-        bot.send_message(chat_id, L10n::mod_panel(lang)).await?;
+    if is_authorized(state, user_id).await? {
+        if state.client_tg_id == user_id {
+            bot.send_message(chat_id, L10n::owner_panel(lang)).await?;
+        } else {
+            bot.send_message(chat_id, L10n::mod_panel(lang)).await?;
+        }
     } else {
         bot.send_message(chat_id, L10n::welcome(lang)).await?;
     }
@@ -152,7 +259,7 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
 
 async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
     let parent_id: i64 = match args.trim().parse() {
         Ok(id) if id > 0 => id,
         _ => {
@@ -164,7 +271,7 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
 
     if state
         .db
-        .get_message_by_id(state.bot_config.id, parent_id)
+        .get_message_by_id(state.bot_id, parent_id)
         .await?
         .is_none()
     {
@@ -175,7 +282,7 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
 
     state
         .db
-        .set_user_state(state.bot_config.id, user_id, "reply_mode", parent_id)
+        .set_user_state(state.bot_id, user_id, "reply_mode", parent_id)
         .await?;
     bot.send_message(msg.chat.id, L10n::send_reply_to_post(lang))
         .await?;
@@ -185,9 +292,9 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
 async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
-    if state.db.is_banned(state.bot_config.id, user_id).await? {
+    if state.db.is_banned(state.bot_id, user_id).await? {
         bot.send_message(chat_id, L10n::user_banned(lang)).await?;
         return Ok(());
     }
@@ -199,7 +306,7 @@ async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     }
     if state
         .db
-        .message_exists(state.bot_config.id, chat_id.0, msg.id.0 as i32)
+        .message_exists(state.bot_id, chat_id.0, msg.id.0 as i32)
         .await?
     {
         return Ok(());
@@ -214,7 +321,7 @@ async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
 
     let new_msg = NewMessage {
-        bot_id: state.bot_config.id,
+        bot_id: state.bot_id,
         chat_id: chat_id.0,
         telegram_message_id: msg.id.0 as i32,
         sender_id: user_id,
@@ -238,17 +345,14 @@ async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 async fn handle_reply_content(bot: &Bot, msg: &Message, state: &WorkerState, parent_id: i64) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if state
         .db
-        .message_exists(state.bot_config.id, chat_id.0, msg.id.0 as i32)
+        .message_exists(state.bot_id, chat_id.0, msg.id.0 as i32)
         .await?
     {
-        state
-            .db
-            .clear_user_state(state.bot_config.id, user_id)
-            .await?;
+        state.db.clear_user_state(state.bot_id, user_id).await?;
         return Ok(());
     }
 
@@ -261,7 +365,7 @@ async fn handle_reply_content(bot: &Bot, msg: &Message, state: &WorkerState, par
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
 
     let new_msg = NewMessage {
-        bot_id: state.bot_config.id,
+        bot_id: state.bot_id,
         chat_id: chat_id.0,
         telegram_message_id: msg.id.0 as i32,
         sender_id: user_id,
@@ -275,10 +379,7 @@ async fn handle_reply_content(bot: &Bot, msg: &Message, state: &WorkerState, par
 
     match state.db.save_message(&new_msg).await {
         Ok(true) => {
-            state
-                .db
-                .clear_user_state(state.bot_config.id, user_id)
-                .await?;
+            state.db.clear_user_state(state.bot_id, user_id).await?;
             bot.send_message(chat_id, L10n::reply_accepted(lang))
                 .await?;
             notify_admins(bot, state, &new_msg, lang).await?;
@@ -288,10 +389,7 @@ async fn handle_reply_content(bot: &Bot, msg: &Message, state: &WorkerState, par
             tracing::error!(error = %e, "Failed to save reply");
             bot.send_message(chat_id, L10n::error_sending_reply(lang))
                 .await?;
-            state
-                .db
-                .clear_user_state(state.bot_config.id, user_id)
-                .await?;
+            state.db.clear_user_state(state.bot_id, user_id).await?;
         }
     }
     Ok(())
@@ -304,16 +402,13 @@ async fn handle_send_reason(
     target_user_id: i64,
 ) -> R {
     let admin_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
 
     let _ = bot
         .send_message(ChatId(target_user_id), L10n::rejected_reason(lang, reason))
         .await;
-    state
-        .db
-        .clear_user_state(state.bot_config.id, admin_id)
-        .await?;
+    state.db.clear_user_state(state.bot_id, admin_id).await?;
     bot.send_message(msg.chat.id, L10n::reason_sent(lang))
         .await?;
     Ok(())
@@ -326,23 +421,17 @@ async fn handle_send_ban_reason(
     target_user_id: i64,
 ) -> R {
     let admin_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
 
     match state
         .db
-        .create_ban_record(state.bot_config.id, target_user_id, reason)
+        .create_ban_record(state.bot_id, target_user_id, reason)
         .await
     {
         Ok(ban_id) => {
-            state
-                .db
-                .ban_user(state.bot_config.id, target_user_id)
-                .await?;
-            state
-                .db
-                .clear_user_state(state.bot_config.id, admin_id)
-                .await?;
+            state.db.ban_user(state.bot_id, target_user_id).await?;
+            state.db.clear_user_state(state.bot_id, admin_id).await?;
 
             let _ = bot
                 .send_message(
@@ -357,10 +446,7 @@ async fn handle_send_ban_reason(
             tracing::error!(error = %e, "Failed to ban user");
             bot.send_message(msg.chat.id, L10n::error_banning_user(lang))
                 .await?;
-            state
-                .db
-                .clear_user_state(state.bot_config.id, admin_id)
-                .await?;
+            state.db.clear_user_state(state.bot_id, admin_id).await?;
         }
     }
     Ok(())
@@ -378,7 +464,7 @@ fn has_content(msg: &Message) -> bool {
 }
 
 async fn notify_admins(bot: &Bot, state: &WorkerState, msg: &NewMessage, lang: Locale) -> R {
-    let admins = state.db.get_admins(state.bot_config.id).await?;
+    let admins = state.db.get_admins(state.bot_id).await?;
     let notification = L10n::new_proposal_notif(
         lang,
         &msg.proposal_group_id,
@@ -386,7 +472,9 @@ async fn notify_admins(bot: &Bot, state: &WorkerState, msg: &NewMessage, lang: L
         &msg.media_type,
     );
     for admin in admins {
-        let _ = bot.send_message(ChatId(admin.user_id), &notification).await;
+        if !admin.frozen {
+            let _ = bot.send_message(ChatId(admin.user_id), &notification).await;
+        }
     }
     Ok(())
 }
@@ -394,7 +482,7 @@ async fn notify_admins(bot: &Bot, state: &WorkerState, msg: &NewMessage, lang: L
 // --- MODERATION LOGIC ---
 async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
@@ -405,7 +493,7 @@ async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 
 async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
@@ -419,17 +507,14 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
         return Ok(());
     }
 
-    match state.db.get_ban_record(state.bot_config.id, ban_id).await? {
+    match state.db.get_ban_record(state.bot_id, ban_id).await? {
         None => {
             bot.send_message(msg.chat.id, L10n::ban_not_found(lang))
                 .await?;
         }
         Some(record) => {
-            state
-                .db
-                .pardon_user(state.bot_config.id, record.user_id)
-                .await?;
-            state.db.deactivate_ban(state.bot_config.id, ban_id).await?;
+            state.db.pardon_user(state.bot_id, record.user_id).await?;
+            state.db.deactivate_ban(state.bot_id, ban_id).await?;
             let _ = bot
                 .send_message(ChatId(record.user_id), L10n::access_restored(lang))
                 .await;
@@ -442,7 +527,43 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
 
 async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &WorkerState) -> R {
     let user_id = q.from.id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let data = q.data.as_deref().unwrap_or("");
+    let bot_id = state.bot_id;
+
+    // Обработка выбора языка при первичной настройке
+    if data.starts_with("setup_lang_") {
+        if user_id == state.client_tg_id {
+            let lang = if data == "setup_lang_ru" {
+                Locale::Ru
+            } else {
+                Locale::En
+            };
+            state.db.set_language(bot_id, lang).await?;
+
+            // Обновляем язык в памяти
+            let mut cfg = state.config.write().await;
+            cfg.lang = lang.as_str().to_string();
+            drop(cfg);
+
+            let code = uuid::Uuid::new_v4().simple().to_string()[..4].to_uppercase();
+            state.db.set_setup_code(bot_id, &code).await?;
+
+            bot.answer_callback_query(q.id.clone()).text("✅").await?;
+            bot.send_message(
+                q.from.id,
+                format!(
+                    "{}\n\nОтправьте в ваш канал команду:\n<code>/connect {}</code>",
+                    L10n::setup_enter_channel(lang),
+                    code
+                ),
+            )
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .await?;
+        }
+        return Ok(());
+    }
+
+    let lang = state.db.get_language(bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.answer_callback_query(q.id.clone())
@@ -455,8 +576,6 @@ async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &WorkerState
         Some(MaybeInaccessibleMessage::Regular(msg)) => (msg.chat.id, msg.id),
         _ => return Ok(()),
     };
-
-    let data = q.data.as_deref().unwrap_or("");
 
     if data == "next" {
         show_next_proposal(bot, chat_id, state, lang).await?;
@@ -483,16 +602,11 @@ async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &WorkerState
 }
 
 async fn is_authorized(state: &WorkerState, user_id: i64) -> Result<bool> {
-    Ok(state.bot_config.client_tg_id.unwrap_or(0) == user_id
-        || state.db.is_admin(state.bot_config.id, user_id).await?)
+    Ok(state.client_tg_id == user_id || state.db.is_admin(state.bot_id, user_id).await?)
 }
 
 async fn show_next_proposal(bot: &Bot, chat_id: ChatId, state: &WorkerState, lang: Locale) -> R {
-    match state
-        .db
-        .get_next_pending_proposal(state.bot_config.id)
-        .await?
-    {
+    match state.db.get_next_pending_proposal(state.bot_id).await? {
         None => {
             bot.send_message(chat_id, L10n::no_new_proposals(lang))
                 .await?;
@@ -500,7 +614,7 @@ async fn show_next_proposal(bot: &Bot, chat_id: ChatId, state: &WorkerState, lan
         Some((gid,)) => {
             let messages = state
                 .db
-                .get_proposal_by_group_id(state.bot_config.id, &gid)
+                .get_proposal_by_group_id(state.bot_id, &gid)
                 .await?;
             let proposal = Proposal {
                 group_id: gid,
@@ -549,13 +663,13 @@ async fn handle_approve(
 ) -> R {
     let msg = state
         .db
-        .get_message_by_id(state.bot_config.id, msg_id)
+        .get_message_by_id(state.bot_id, msg_id)
         .await?
         .ok_or_else(|| anyhow!("Message not found"))?;
     let group_id = msg.proposal_group_id.clone();
     let messages = state
         .db
-        .get_proposal_by_group_id(state.bot_config.id, &group_id)
+        .get_proposal_by_group_id(state.bot_id, &group_id)
         .await?;
     let proposal = Proposal {
         group_id: group_id.clone(),
@@ -563,11 +677,7 @@ async fn handle_approve(
     };
 
     let reply_to = if let Some(parent_id) = proposal.first().parent_message_id {
-        match state
-            .db
-            .get_message_by_id(state.bot_config.id, parent_id)
-            .await?
-        {
+        match state.db.get_message_by_id(state.bot_id, parent_id).await? {
             Some(parent) if parent.channel_message_id.is_some() => parent.channel_message_id,
             _ => None,
         }
@@ -575,20 +685,22 @@ async fn handle_approve(
         None
     };
 
-    // Проверяем тариф клиента
-    let plan = state
-        .db
-        .get_client_plan_by_bot_id(state.bot_config.id)
-        .await?;
+    // Читаем актуальные данные из памяти (state.config)
+    let cfg = state.config.read().await;
+    let channel_id = cfg.channel_id;
+    let bot_username = cfg.bot_username.clone();
+    drop(cfg); // Отпускаем лок
+
+    let plan = state.db.get_client_plan_by_bot_id(state.bot_id).await?;
     let is_pro = plan == "pro";
 
     match media::publish(
         bot,
-        state.bot_config.channel_id,
+        channel_id, // Берем ID канала из памяти
         &proposal,
-        &state.bot_config.bot_username,
+        &bot_username,
         &state.master_config.watermark_username,
-        is_pro, // Передаем флаг Pro-подписки
+        is_pro,
         reply_to,
         lang,
     )
@@ -597,11 +709,11 @@ async fn handle_approve(
         Ok(Some(channel_msg_id)) => {
             state
                 .db
-                .update_channel_message_id(state.bot_config.id, &group_id, channel_msg_id)
+                .update_channel_message_id(state.bot_id, &group_id, channel_msg_id)
                 .await?;
             state
                 .db
-                .update_proposal_status(state.bot_config.id, &group_id, "approved")
+                .update_proposal_status(state.bot_id, &group_id, "approved")
                 .await?;
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::published(lang))
@@ -634,7 +746,7 @@ async fn handle_reject(
 ) -> R {
     let msg = state
         .db
-        .get_message_by_id(state.bot_config.id, msg_id)
+        .get_message_by_id(state.bot_id, msg_id)
         .await?
         .ok_or_else(|| anyhow!("Message not found"))?;
     let sender_id = msg.sender_id;
@@ -642,12 +754,9 @@ async fn handle_reject(
 
     state
         .db
-        .update_proposal_status(state.bot_config.id, &group_id, "rejected")
+        .update_proposal_status(state.bot_id, &group_id, "rejected")
         .await?;
-    state
-        .db
-        .delete_proposal(state.bot_config.id, &group_id)
-        .await?;
+    state.db.delete_proposal(state.bot_id, &group_id).await?;
 
     bot.answer_callback_query(q.id.clone())
         .text(L10n::rejected(lang))
@@ -679,7 +788,7 @@ async fn handle_reason(
         .await?;
     state
         .db
-        .set_user_state(state.bot_config.id, admin_id, "reason", sender_id)
+        .set_user_state(state.bot_id, admin_id, "reason", sender_id)
         .await?;
     bot.answer_callback_query(q.id.clone())
         .text(L10n::enter_reason_callback(lang))
@@ -700,7 +809,7 @@ async fn handle_ban_reason(
         .await?;
     state
         .db
-        .set_user_state(state.bot_config.id, admin_id, "ban_reason", sender_id)
+        .set_user_state(state.bot_id, admin_id, "ban_reason", sender_id)
         .await?;
     bot.answer_callback_query(q.id.clone())
         .text(L10n::enter_reason_callback(lang))
@@ -718,7 +827,7 @@ async fn delete_callback_message(bot: &Bot, chat_id: ChatId, q: &CallbackQuery) 
 // --- ADMIN LOGIC ---
 async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
@@ -727,7 +836,13 @@ async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args
 
     match Locale::parse(args.trim()) {
         Some(new_lang) => {
-            state.db.set_language(state.bot_config.id, new_lang).await?;
+            state.db.set_language(state.bot_id, new_lang).await?;
+
+            // Обновляем язык в памяти
+            let mut cfg = state.config.write().await;
+            cfg.lang = new_lang.as_str().to_string();
+            drop(cfg);
+
             bot.send_message(msg.chat.id, L10n::lang_updated(new_lang))
                 .await?;
         }
@@ -741,7 +856,7 @@ async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args
 
 async fn handle_add_admin(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.send_message(msg.chat.id, L10n::only_owner_add_admins(lang))
@@ -758,20 +873,16 @@ async fn handle_add_admin(bot: &Bot, msg: &Message, state: &WorkerState, args: &
         }
     };
 
-    // ПРОВЕРКА ЛИМИТОВ ТАРИФА
-    let plan = state
-        .db
-        .get_client_plan_by_bot_id(state.bot_config.id)
-        .await?;
-    let admin_count = state.db.count_admins(state.bot_config.id).await?;
+    let plan = state.db.get_client_plan_by_bot_id(state.bot_id).await?;
+    let admin_count = state.db.count_active_admins(state.bot_id).await?;
 
-    if plan == "free" && admin_count >= 1 {
-        bot.send_message(msg.chat.id, L10n::free_limit_admins(lang))
-            .await?;
-        return Ok(());
-    }
+    let frozen = if plan == "free" && admin_count >= 1 {
+        true
+    } else {
+        false
+    };
 
-    if state.db.is_admin(state.bot_config.id, target_id).await? {
+    if state.db.is_admin(state.bot_id, target_id).await? {
         bot.send_message(msg.chat.id, L10n::admin_already_exists(lang, target_id))
             .await?;
         return Ok(());
@@ -780,19 +891,25 @@ async fn handle_add_admin(bot: &Bot, msg: &Message, state: &WorkerState, args: &
     let user_name = resolve_user_name(bot, target_id).await;
     state
         .db
-        .add_admin(state.bot_config.id, target_id, &user_name)
+        .add_admin(state.bot_id, target_id, &user_name, frozen)
         .await?;
-    bot.send_message(msg.chat.id, L10n::admin_added(lang, &user_name))
-        .await?;
-    let _ = bot
-        .send_message(ChatId(target_id), L10n::admin_added_notification(lang))
-        .await;
+
+    if frozen {
+        bot.send_message(msg.chat.id, L10n::admin_added_frozen(lang, &user_name))
+            .await?;
+    } else {
+        bot.send_message(msg.chat.id, L10n::admin_added(lang, &user_name))
+            .await?;
+        let _ = bot
+            .send_message(ChatId(target_id), L10n::admin_added_notification(lang))
+            .await;
+    }
     Ok(())
 }
 
 async fn handle_remove_admin(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.send_message(msg.chat.id, L10n::only_owner_remove_admins(lang))
@@ -809,16 +926,13 @@ async fn handle_remove_admin(bot: &Bot, msg: &Message, state: &WorkerState, args
         }
     };
 
-    if !state.db.is_admin(state.bot_config.id, target_id).await? {
+    if !state.db.is_admin(state.bot_id, target_id).await? {
         bot.send_message(msg.chat.id, L10n::admin_not_found(lang))
             .await?;
         return Ok(());
     }
 
-    state
-        .db
-        .remove_admin(state.bot_config.id, target_id)
-        .await?;
+    state.db.remove_admin(state.bot_id, target_id).await?;
     bot.send_message(msg.chat.id, L10n::admin_removed(lang, target_id))
         .await?;
     let _ = bot
@@ -829,7 +943,7 @@ async fn handle_remove_admin(bot: &Bot, msg: &Message, state: &WorkerState, args
 
 async fn handle_admins(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.send_message(msg.chat.id, L10n::only_owner_list_admins(lang))
@@ -837,18 +951,25 @@ async fn handle_admins(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
         return Ok(());
     }
 
-    let admins = state.db.get_admins(state.bot_config.id).await?;
+    let admins = state.db.get_admins(state.bot_id).await?;
     if admins.is_empty() {
         bot.send_message(msg.chat.id, L10n::no_admins(lang)).await?;
         return Ok(());
     }
 
-    let owner_id = state.bot_config.client_tg_id.unwrap_or(0);
+    let owner_id = state.client_tg_id;
     let mut list = L10n::admins_list_header(lang, owner_id);
     for (i, admin) in admins.iter().enumerate() {
         if admin.user_id == owner_id {
             list.push_str(&format!(
                 "{}. {} (ID: {}) 👑\n",
+                i + 1,
+                admin.user_name,
+                admin.user_id
+            ));
+        } else if admin.frozen {
+            list.push_str(&format!(
+                "{}. {} (ID: {}) ❄️ (Заморожен)\n",
                 i + 1,
                 admin.user_name,
                 admin.user_id
@@ -868,14 +989,14 @@ async fn handle_admins(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 
 async fn handle_banned(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_config.id).await?;
+    let lang = state.db.get_language(state.bot_id).await?;
 
     if !is_authorized(state, user_id).await? {
         bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
         return Ok(());
     }
 
-    let records = state.db.get_active_ban_records(state.bot_config.id).await?;
+    let records = state.db.get_active_ban_records(state.bot_id).await?;
     if records.is_empty() {
         bot.send_message(msg.chat.id, L10n::no_active_bans(lang))
             .await?;

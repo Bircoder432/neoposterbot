@@ -1,0 +1,1 @@
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS setup_code TEXT;

@@ -78,28 +78,6 @@ impl Database {
         Ok(())
     }
 
-    // --- Client Bot Management ---
-    pub async fn add_bot(
-        &self,
-        tg_user_id: i64,
-        token: &str,
-        username: &str,
-        channel_id: i64,
-    ) -> Result<BotConfig> {
-        let bot: BotConfig = sqlx::query_as(
-            "INSERT INTO bots (client_id, token, bot_username, channel_id)
-             VALUES ((SELECT id FROM clients WHERE tg_user_id = $1), $2, $3, $4)
-             RETURNING *, NULL as client_tg_id",
-        )
-        .bind(tg_user_id)
-        .bind(token)
-        .bind(username)
-        .bind(channel_id)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(bot)
-    }
-
     // --- Settings & Language ---
     pub async fn get_language(&self, bot_id: i32) -> Result<Locale> {
         let row: Option<(String,)> = sqlx::query_as("SELECT lang FROM bots WHERE id = $1")
@@ -107,15 +85,6 @@ impl Database {
             .fetch_optional(&self.pool)
             .await?;
         Ok(row.and_then(|(v,)| Locale::parse(&v)).unwrap_or(Locale::En))
-    }
-
-    pub async fn set_language(&self, bot_id: i32, lang: Locale) -> Result<()> {
-        sqlx::query("UPDATE bots SET lang = $1 WHERE id = $2")
-            .bind(lang.as_str())
-            .bind(bot_id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
     }
 
     // --- Messages ---
@@ -205,23 +174,6 @@ impl Database {
     ) -> Result<()> {
         sqlx::query("UPDATE messages SET channel_message_id = $1 WHERE bot_id = $2 AND proposal_group_id = $3")
             .bind(msg_id).bind(bot_id).bind(group_id).execute(&self.pool).await?;
-        Ok(())
-    }
-
-    // --- Admins ---
-    pub async fn is_admin(&self, bot_id: i32, user_id: i64) -> Result<bool> {
-        let row: Option<(i32,)> =
-            sqlx::query_as("SELECT 1 FROM admins WHERE bot_id = $1 AND user_id = $2")
-                .bind(bot_id)
-                .bind(user_id)
-                .fetch_optional(&self.pool)
-                .await?;
-        Ok(row.is_some())
-    }
-
-    pub async fn add_admin(&self, bot_id: i32, user_id: i64, user_name: &str) -> Result<()> {
-        sqlx::query("INSERT INTO admins (bot_id, user_id, user_name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING")
-            .bind(bot_id).bind(user_id).bind(user_name).execute(&self.pool).await?;
         Ok(())
     }
 
@@ -384,5 +336,125 @@ impl Database {
         .fetch_optional(&self.pool)
         .await?;
         Ok(row.map(|(p,)| p).unwrap_or_else(|| "free".to_string()))
+    }
+    // --- Client Bot Management ---
+    pub async fn add_bot(&self, tg_user_id: i64, token: &str, username: &str) -> Result<BotConfig> {
+        // Сначала проверяем, есть ли уже бот с таким токеном в базе
+        let existing: Option<BotConfig> = sqlx::query_as(
+            "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.token = $1"
+        )
+        .bind(token).fetch_optional(&self.pool).await?;
+
+        if let Some(bot) = existing {
+            // Если бот принадлежит другому клиенту, запрещаем добавление
+            if bot.client_tg_id != Some(tg_user_id) {
+                anyhow::bail!("Этот токен уже привязан к другому аккаунту.");
+            }
+
+            // Если это бот текущего клиента, реактивируем его и сбрасываем настройку
+            sqlx::query("UPDATE bots SET active = TRUE, bot_username = $1, setup_complete = FALSE, channel_id = 0, setup_code = NULL WHERE id = $2")
+                .bind(username).bind(bot.id).execute(&self.pool).await?;
+
+            // Возвращаем обновленный конфиг
+            let updated_bot: BotConfig = sqlx::query_as(
+                "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.id = $1"
+            )
+            .bind(bot.id).fetch_one(&self.pool).await?;
+
+            Ok(updated_bot)
+        } else {
+            // Если бота нет в базе, создаем новый
+            let bot: BotConfig = sqlx::query_as(
+                "INSERT INTO bots (client_id, token, bot_username, channel_id)
+                 VALUES ((SELECT id FROM clients WHERE tg_user_id = $1), $2, $3, 0)
+                 RETURNING *, NULL as client_tg_id",
+            )
+            .bind(tg_user_id)
+            .bind(token)
+            .bind(username)
+            .fetch_one(&self.pool)
+            .await?;
+            Ok(bot)
+        }
+    }
+
+    // --- Admins ---
+    pub async fn is_admin(&self, bot_id: i32, user_id: i64) -> Result<bool> {
+        // Динамически проверяем: если клиент Pro, то модератор активен.
+        // Если Free, то активен только если не заморожен (frozen = FALSE).
+        let row: Option<(i64,)> = sqlx::query_as(
+            "SELECT 1 FROM admins a
+             JOIN bots b ON a.bot_id = b.id
+             JOIN clients c ON b.client_id = c.id
+             WHERE a.bot_id = $1 AND a.user_id = $2
+             AND (c.pro_expires_at > NOW() OR a.frozen = FALSE)",
+        )
+        .bind(bot_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.is_some())
+    }
+
+    pub async fn add_admin(
+        &self,
+        bot_id: i32,
+        user_id: i64,
+        user_name: &str,
+        frozen: bool,
+    ) -> Result<()> {
+        sqlx::query("INSERT INTO admins (bot_id, user_id, user_name, frozen) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING")
+            .bind(bot_id).bind(user_id).bind(user_name).bind(frozen).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn count_active_admins(&self, bot_id: i32) -> Result<i64> {
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM admins WHERE bot_id = $1 AND frozen = FALSE")
+                .bind(bot_id)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(row.0)
+    }
+    // --- Settings & Setup ---
+    pub async fn is_setup_complete(&self, bot_id: i32) -> Result<bool> {
+        let row: Option<(bool,)> = sqlx::query_as("SELECT setup_complete FROM bots WHERE id = $1")
+            .bind(bot_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|(v,)| v).unwrap_or(false))
+    }
+
+    pub async fn set_language(&self, bot_id: i32, lang: Locale) -> Result<()> {
+        sqlx::query("UPDATE bots SET lang = $1 WHERE id = $2")
+            .bind(lang.as_str())
+            .bind(bot_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn set_setup_code(&self, bot_id: i32, code: &str) -> Result<()> {
+        sqlx::query("UPDATE bots SET setup_code = $1 WHERE id = $2")
+            .bind(code)
+            .bind(bot_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_setup_code(&self, bot_id: i32) -> Result<Option<String>> {
+        let row: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT setup_code FROM bots WHERE id = $1")
+                .bind(bot_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.and_then(|(v,)| v))
+    }
+
+    pub async fn complete_setup(&self, bot_id: i32, channel_id: i64) -> Result<()> {
+        sqlx::query("UPDATE bots SET channel_id = $1, setup_complete = TRUE, setup_code = NULL WHERE id = $2")
+            .bind(channel_id).bind(bot_id).execute(&self.pool).await?;
+        Ok(())
     }
 }
