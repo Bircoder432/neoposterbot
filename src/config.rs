@@ -9,14 +9,10 @@ pub struct Config {
     pub database_url: String,
     pub watermark_username: String,
     pub instruction_url: Url,
-    pub deploy_server: String,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self> {
-        let deploy_server = env::var("DEPLOY_SERVER").unwrap_or_else(|_| "production".to_string());
-
-        // Читаем ссылку на инструкцию из .env, по умолчанию заглушка
         let instruction_url_str =
             env::var("INSTRUCTION_URL").unwrap_or_else(|_| "https://telegra.ph/".to_string());
         let instruction_url =
@@ -31,7 +27,6 @@ impl Config {
             database_url: env::var("DATABASE_URL").context("DATABASE_URL not set")?,
             watermark_username: env::var("WATERMARK_USERNAME")
                 .unwrap_or_else(|_| "@superduperbot".into()),
-            deploy_server,
             instruction_url,
         })
     }

@@ -82,10 +82,9 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 
     let setup_complete = state.db.is_setup_complete(bot_id).await?;
 
-    // --- ФАЗА ПЕРВОНАЧАЛЬНОЙ НАСТРОЙКИ ---
     if !setup_complete {
         if user_id != state.client_tg_id {
-            return Ok(()); // Настройку может делать только владелец
+            return Ok(());
         }
         return handle_setup(bot, msg, state).await;
     }
@@ -108,7 +107,6 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     handle_proposal(bot, msg, state).await
 }
 
-// --- SETUP LOGIC ---
 async fn handle_setup(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let text = msg.text().unwrap_or("");
     let bot_id = state.bot_id;
@@ -165,12 +163,11 @@ async fn process_channel_post(bot: &Bot, post: &Message, state: &WorkerState) ->
                 let channel_name = post.chat.title().unwrap_or("Канал").to_string();
                 state.db.complete_setup(state.bot_id, channel_id).await?;
 
-                // МАГИЯ ЗДЕСЬ: Обновляем конфиг прямо в памяти Воркера!
                 let mut cfg = state.config.write().await;
                 cfg.channel_id = channel_id;
                 cfg.setup_complete = true;
                 cfg.setup_code = None;
-                drop(cfg); // Отпускаем лок
+                drop(cfg);
 
                 bot.delete_message(post.chat.id, post.id).await.ok();
 
@@ -212,7 +209,6 @@ async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     }
 }
 
-// --- PROPOSALS LOGIC ---
 async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
@@ -479,7 +475,6 @@ async fn notify_admins(bot: &Bot, state: &WorkerState, msg: &NewMessage, lang: L
     Ok(())
 }
 
-// --- MODERATION LOGIC ---
 async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
@@ -530,7 +525,6 @@ async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &WorkerState
     let data = q.data.as_deref().unwrap_or("");
     let bot_id = state.bot_id;
 
-    // Обработка выбора языка при первичной настройке
     if data.starts_with("setup_lang_") {
         if user_id == state.client_tg_id {
             let lang = if data == "setup_lang_ru" {
@@ -540,7 +534,6 @@ async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &WorkerState
             };
             state.db.set_language(bot_id, lang).await?;
 
-            // Обновляем язык в памяти
             let mut cfg = state.config.write().await;
             cfg.lang = lang.as_str().to_string();
             drop(cfg);
@@ -685,18 +678,17 @@ async fn handle_approve(
         None
     };
 
-    // Читаем актуальные данные из памяти (state.config)
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
     let bot_username = cfg.bot_username.clone();
-    drop(cfg); // Отпускаем лок
+    drop(cfg);
 
     let plan = state.db.get_client_plan_by_bot_id(state.bot_id).await?;
     let is_pro = plan == "pro";
 
     match media::publish(
         bot,
-        channel_id, // Берем ID канала из памяти
+        channel_id,
         &proposal,
         &bot_username,
         &state.master_config.watermark_username,
@@ -824,7 +816,6 @@ async fn delete_callback_message(bot: &Bot, chat_id: ChatId, q: &CallbackQuery) 
     Ok(())
 }
 
-// --- ADMIN LOGIC ---
 async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
@@ -838,7 +829,6 @@ async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args
         Some(new_lang) => {
             state.db.set_language(state.bot_id, new_lang).await?;
 
-            // Обновляем язык в памяти
             let mut cfg = state.config.write().await;
             cfg.lang = new_lang.as_str().to_string();
             drop(cfg);
@@ -876,7 +866,7 @@ async fn handle_add_admin(bot: &Bot, msg: &Message, state: &WorkerState, args: &
     let plan = state.db.get_client_plan_by_bot_id(state.bot_id).await?;
     let admin_count = state.db.count_active_admins(state.bot_id).await?;
 
-    let frozen = if plan == "free" && admin_count >= 1 {
+    let frozen = if plan == "free" && admin_count >= 2 {
         true
     } else {
         false

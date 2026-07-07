@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     db.migrate().await.context("Failed to run migrations")?;
 
     let manager = BotManager::new(db.clone(), config.clone());
-    manager.start_all().await?; // Запускаем все существующие боты-воркеры
+    manager.start_all().await?;
 
     let state = Arc::new(MasterState {
         db,

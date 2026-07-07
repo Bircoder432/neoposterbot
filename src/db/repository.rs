@@ -41,11 +41,9 @@ impl Database {
 
     pub async fn set_client_plan(&self, tg_user_id: i64, plan: &str) -> Result<()> {
         if plan == "pro" {
-            // Выдаем Pro на 30 дней
             sqlx::query("UPDATE clients SET plan = 'pro', pro_expires_at = NOW() + INTERVAL '30 days' WHERE tg_user_id = $1")
                 .bind(tg_user_id).execute(&self.pool).await?;
         } else {
-            // Сбрасываем на Free (обнуляем дату)
             sqlx::query(
                 "UPDATE clients SET plan = 'free', pro_expires_at = NULL WHERE tg_user_id = $1",
             )
@@ -78,7 +76,6 @@ impl Database {
         Ok(())
     }
 
-    // --- Settings & Language ---
     pub async fn get_language(&self, bot_id: i32) -> Result<Locale> {
         let row: Option<(String,)> = sqlx::query_as("SELECT lang FROM bots WHERE id = $1")
             .bind(bot_id)
@@ -87,7 +84,6 @@ impl Database {
         Ok(row.and_then(|(v,)| Locale::parse(&v)).unwrap_or(Locale::En))
     }
 
-    // --- Messages ---
     pub async fn save_message(&self, msg: &NewMessage) -> Result<bool> {
         let now = Utc::now();
         let res = sqlx::query(
@@ -203,7 +199,6 @@ impl Database {
         Ok(row.0)
     }
 
-    // --- Bans ---
     pub async fn ban_user(&self, bot_id: i32, user_id: i64) -> Result<()> {
         sqlx::query(
             "INSERT INTO banned_users (bot_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
@@ -269,7 +264,6 @@ impl Database {
         Ok(())
     }
 
-    // --- User States ---
     pub async fn set_user_state(
         &self,
         bot_id: i32,
@@ -298,7 +292,6 @@ impl Database {
         Ok(())
     }
 
-    // --- Owner & Client Management ---
     pub async fn ensure_client(&self, tg_user_id: i64) -> Result<Client> {
         let client: Client = sqlx::query_as(
             "INSERT INTO clients (tg_user_id) VALUES ($1)
@@ -337,25 +330,20 @@ impl Database {
         .await?;
         Ok(row.map(|(p,)| p).unwrap_or_else(|| "free".to_string()))
     }
-    // --- Client Bot Management ---
     pub async fn add_bot(&self, tg_user_id: i64, token: &str, username: &str) -> Result<BotConfig> {
-        // Сначала проверяем, есть ли уже бот с таким токеном в базе
         let existing: Option<BotConfig> = sqlx::query_as(
             "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.token = $1"
         )
         .bind(token).fetch_optional(&self.pool).await?;
 
         if let Some(bot) = existing {
-            // Если бот принадлежит другому клиенту, запрещаем добавление
             if bot.client_tg_id != Some(tg_user_id) {
                 anyhow::bail!("Этот токен уже привязан к другому аккаунту.");
             }
 
-            // Если это бот текущего клиента, реактивируем его и сбрасываем настройку
             sqlx::query("UPDATE bots SET active = TRUE, bot_username = $1, setup_complete = FALSE, channel_id = 0, setup_code = NULL WHERE id = $2")
                 .bind(username).bind(bot.id).execute(&self.pool).await?;
 
-            // Возвращаем обновленный конфиг
             let updated_bot: BotConfig = sqlx::query_as(
                 "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.id = $1"
             )
@@ -363,7 +351,6 @@ impl Database {
 
             Ok(updated_bot)
         } else {
-            // Если бота нет в базе, создаем новый
             let bot: BotConfig = sqlx::query_as(
                 "INSERT INTO bots (client_id, token, bot_username, channel_id)
                  VALUES ((SELECT id FROM clients WHERE tg_user_id = $1), $2, $3, 0)
@@ -378,10 +365,7 @@ impl Database {
         }
     }
 
-    // --- Admins ---
     pub async fn is_admin(&self, bot_id: i32, user_id: i64) -> Result<bool> {
-        // Динамически проверяем: если клиент Pro, то модератор активен.
-        // Если Free, то активен только если не заморожен (frozen = FALSE).
         let row: Option<(i64,)> = sqlx::query_as(
             "SELECT 1 FROM admins a
              JOIN bots b ON a.bot_id = b.id
@@ -416,7 +400,6 @@ impl Database {
                 .await?;
         Ok(row.0)
     }
-    // --- Settings & Setup ---
     pub async fn is_setup_complete(&self, bot_id: i32) -> Result<bool> {
         let row: Option<(bool,)> = sqlx::query_as("SELECT setup_complete FROM bots WHERE id = $1")
             .bind(bot_id)

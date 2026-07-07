@@ -36,14 +36,12 @@ impl BotManager {
             return;
         }
 
-        // Сохраняем ID до того, как переменная будет перемещена в замыкание
         let bot_id = bot_config.id;
 
         let bot = Bot::new(&bot_config.token);
         let db = self.db.clone();
         let config = self.config.clone();
 
-        // Клонируем конфиг, так как оригинал будет перемещен в замыкание
         let bot_config_clone = bot_config.clone();
 
         let handle = tokio::spawn(async move {
