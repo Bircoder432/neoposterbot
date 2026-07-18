@@ -1,4 +1,4 @@
-use super::worker::run_worker_bot;
+use crate::bot::worker::run_worker_bot;
 use crate::config::Config;
 use crate::db::repository::Database;
 use std::collections::HashMap;

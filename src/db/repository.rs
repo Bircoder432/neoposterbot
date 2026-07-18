@@ -29,6 +29,50 @@ impl Database {
             .await?)
     }
 
+    pub async fn get_clients_paginated(&self, offset: i64, limit: i64) -> Result<Vec<Client>> {
+        Ok(
+            sqlx::query_as("SELECT * FROM clients ORDER BY created_at DESC OFFSET $1 LIMIT $2")
+                .bind(offset)
+                .bind(limit)
+                .fetch_all(&self.pool)
+                .await?,
+        )
+    }
+
+    pub async fn count_clients(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM clients")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
+    pub async fn get_client_by_tg_id(&self, tg_user_id: i64) -> Result<Option<Client>> {
+        Ok(
+            sqlx::query_as("SELECT * FROM clients WHERE tg_user_id = $1")
+                .bind(tg_user_id)
+                .fetch_optional(&self.pool)
+                .await?,
+        )
+    }
+
+    pub async fn get_client_lang(&self, tg_user_id: i64) -> Result<Locale> {
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT lang FROM clients WHERE tg_user_id = $1")
+                .bind(tg_user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.and_then(|(v,)| Locale::parse(&v)).unwrap_or(Locale::Ru))
+    }
+
+    pub async fn set_client_lang(&self, tg_user_id: i64, lang: Locale) -> Result<()> {
+        sqlx::query("UPDATE clients SET lang = $1 WHERE tg_user_id = $2")
+            .bind(lang.as_str())
+            .bind(tg_user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_all_bots(&self) -> Result<Vec<BotConfig>> {
         Ok(sqlx::query_as("SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.active = TRUE")
             .fetch_all(&self.pool).await?)
@@ -39,19 +83,25 @@ impl Database {
             .bind(tg_user_id).fetch_all(&self.pool).await?)
     }
 
-    pub async fn set_client_plan(&self, tg_user_id: i64, plan: &str) -> Result<()> {
-        if plan == "pro" {
-            sqlx::query("UPDATE clients SET plan = 'pro', pro_expires_at = NOW() + INTERVAL '30 days' WHERE tg_user_id = $1")
-                .bind(tg_user_id).execute(&self.pool).await?;
+    pub async fn get_all_bots_by_client_tg_id(&self, tg_user_id: i64) -> Result<Vec<BotConfig>> {
+        Ok(sqlx::query_as("SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE c.tg_user_id = $1 ORDER BY b.created_at DESC")
+            .bind(tg_user_id).fetch_all(&self.pool).await?)
+    }
+
+    pub async fn toggle_client_plan(&self, tg_user_id: i64) -> Result<String> {
+        let client = self.get_client_by_tg_id(tg_user_id).await?;
+        if let Some(client) = client {
+            let is_pro = client.pro_expires_at.map_or(false, |d| d > Utc::now());
+            if is_pro {
+                self.set_client_plan(tg_user_id, "free").await?;
+                Ok("free".to_string())
+            } else {
+                self.set_client_plan(tg_user_id, "pro").await?;
+                Ok("pro".to_string())
+            }
         } else {
-            sqlx::query(
-                "UPDATE clients SET plan = 'free', pro_expires_at = NULL WHERE tg_user_id = $1",
-            )
-            .bind(tg_user_id)
-            .execute(&self.pool)
-            .await?;
+            anyhow::bail!("Client not found");
         }
-        Ok(())
     }
 
     pub async fn ban_client(&self, tg_user_id: i64) -> Result<Vec<i32>> {
@@ -66,6 +116,33 @@ impl Database {
         .bind(tg_user_id).fetch_all(&self.pool).await?;
 
         Ok(bot_ids.into_iter().map(|(id,)| id).collect())
+    }
+
+    pub async fn unban_client(&self, tg_user_id: i64) -> Result<Vec<BotConfig>> {
+        sqlx::query("UPDATE clients SET banned = FALSE WHERE tg_user_id = $1")
+            .bind(tg_user_id)
+            .execute(&self.pool)
+            .await?;
+
+        let bots: Vec<BotConfig> = sqlx::query_as(
+            "UPDATE bots SET active = TRUE \
+             WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1) \
+             AND setup_complete = TRUE \
+             RETURNING *, NULL as client_tg_id",
+        )
+        .bind(tg_user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let bots = bots
+            .into_iter()
+            .map(|mut b| {
+                b.client_tg_id = Some(tg_user_id);
+                b
+            })
+            .collect();
+
+        Ok(bots)
     }
 
     pub async fn deactivate_bot(&self, bot_id: i32) -> Result<()> {
@@ -330,6 +407,7 @@ impl Database {
         .await?;
         Ok(row.map(|(p,)| p).unwrap_or_else(|| "free".to_string()))
     }
+
     pub async fn add_bot(&self, tg_user_id: i64, token: &str, username: &str) -> Result<BotConfig> {
         let existing: Option<BotConfig> = sqlx::query_as(
             "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.token = $1"
@@ -341,7 +419,7 @@ impl Database {
                 anyhow::bail!("Этот токен уже привязан к другому аккаунту.");
             }
 
-            sqlx::query("UPDATE bots SET active = TRUE, bot_username = $1, setup_complete = FALSE, channel_id = 0, setup_code = NULL WHERE id = $2")
+            sqlx::query("UPDATE bots SET active = TRUE, bot_username = $1, setup_complete = FALSE, channel_id = 0, channel_username = NULL, setup_code = NULL WHERE id = $2")
                 .bind(username).bind(bot.id).execute(&self.pool).await?;
 
             let updated_bot: BotConfig = sqlx::query_as(
@@ -366,17 +444,12 @@ impl Database {
     }
 
     pub async fn is_admin(&self, bot_id: i32, user_id: i64) -> Result<bool> {
-        let row: Option<(i32,)> = sqlx::query_as(
-            "SELECT 1 FROM admins a
-             JOIN bots b ON a.bot_id = b.id
-             JOIN clients c ON b.client_id = c.id
-             WHERE a.bot_id = $1 AND a.user_id = $2
-             AND (c.pro_expires_at > NOW() OR a.frozen = FALSE)",
-        )
-        .bind(bot_id)
-        .bind(user_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<(i32,)> =
+            sqlx::query_as("SELECT 1 FROM admins WHERE bot_id = $1 AND user_id = $2")
+                .bind(bot_id)
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(row.is_some())
     }
 
@@ -392,14 +465,6 @@ impl Database {
         Ok(())
     }
 
-    pub async fn count_active_admins(&self, bot_id: i32) -> Result<i64> {
-        let row: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM admins WHERE bot_id = $1 AND frozen = FALSE")
-                .bind(bot_id)
-                .fetch_one(&self.pool)
-                .await?;
-        Ok(row.0)
-    }
     pub async fn is_setup_complete(&self, bot_id: i32) -> Result<bool> {
         let row: Option<(bool,)> = sqlx::query_as("SELECT setup_complete FROM bots WHERE id = $1")
             .bind(bot_id)
@@ -435,9 +500,151 @@ impl Database {
         Ok(row.and_then(|(v,)| v))
     }
 
-    pub async fn complete_setup(&self, bot_id: i32, channel_id: i64) -> Result<()> {
-        sqlx::query("UPDATE bots SET channel_id = $1, setup_complete = TRUE, setup_code = NULL WHERE id = $2")
-            .bind(channel_id).bind(bot_id).execute(&self.pool).await?;
+    pub async fn complete_setup(
+        &self,
+        bot_id: i32,
+        channel_id: i64,
+        channel_username: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query("UPDATE bots SET channel_id = $1, channel_username = $2, setup_complete = TRUE, setup_code = NULL WHERE id = $3")
+            .bind(channel_id).bind(channel_username).bind(bot_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    // ── Admin invite methods ──
+
+    pub async fn create_admin_invite(&self, bot_id: i32) -> Result<String> {
+        let code = uuid::Uuid::new_v4().simple().to_string()[..8].to_uppercase();
+        sqlx::query("INSERT INTO admin_invites (bot_id, code) VALUES ($1, $2)")
+            .bind(bot_id)
+            .bind(&code)
+            .execute(&self.pool)
+            .await?;
+        Ok(code)
+    }
+
+    pub async fn use_admin_invite(&self, bot_id: i32, code: &str) -> Result<bool> {
+        let row: Option<(i32,)> = sqlx::query_as(
+            "SELECT 1 FROM admin_invites \
+             WHERE bot_id = $1 AND code = $2 AND used = FALSE AND expires_at > NOW()",
+        )
+        .bind(bot_id)
+        .bind(code)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if row.is_some() {
+            sqlx::query("UPDATE admin_invites SET used = TRUE WHERE bot_id = $1 AND code = $2")
+                .bind(bot_id)
+                .bind(code)
+                .execute(&self.pool)
+                .await?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    // Новый метод для отзыва ссылки
+    pub async fn revoke_admin_invite(&self, bot_id: i32, code: &str) -> Result<()> {
+        sqlx::query("DELETE FROM admin_invites WHERE bot_id = $1 AND code = $2")
+            .bind(bot_id)
+            .bind(code)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // Новый метод для изменения статуса заморозки
+    pub async fn set_admin_frozen(&self, bot_id: i32, user_id: i64, frozen: bool) -> Result<()> {
+        sqlx::query("UPDATE admins SET frozen = $1 WHERE bot_id = $2 AND user_id = $3")
+            .bind(frozen)
+            .bind(bot_id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_admin_status(&self, bot_id: i32, user_id: i64) -> Result<Option<bool>> {
+        let row: Option<(bool,)> =
+            sqlx::query_as("SELECT frozen FROM admins WHERE bot_id = $1 AND user_id = $2")
+                .bind(bot_id)
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.map(|(f,)| f))
+    }
+
+    pub async fn count_active_admins(&self, bot_id: i32, owner_id: i64) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM admins WHERE bot_id = $1 AND frozen = FALSE AND user_id != $2",
+        )
+        .bind(bot_id)
+        .bind(owner_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.0)
+    }
+
+    pub async fn check_plan_limits(&self, bot_id: i32, owner_id: i64) -> Result<()> {
+        let plan = self.get_client_plan_by_bot_id(bot_id).await?;
+        if plan == "free" {
+            let active_count = self.count_active_admins(bot_id, owner_id).await?;
+            // Лимит: ровно 1 модератор на бесплатном тарифе
+            if active_count > 1 {
+                self.enforce_free_plan_limit(bot_id, owner_id).await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn set_client_plan(&self, tg_user_id: i64, plan: &str) -> Result<()> {
+        if plan == "pro" {
+            sqlx::query("UPDATE clients SET plan = 'pro', pro_expires_at = NOW() + INTERVAL '30 days' WHERE tg_user_id = $1")
+                .bind(tg_user_id).execute(&self.pool).await?;
+        } else {
+            sqlx::query(
+                "UPDATE clients SET plan = 'free', pro_expires_at = NULL WHERE tg_user_id = $1",
+            )
+            .bind(tg_user_id)
+            .execute(&self.pool)
+            .await?;
+
+            // Замораживаем лишних модераторов во всех ботах клиента
+            let bot_ids: Vec<(i32,)> = sqlx::query_as(
+                "SELECT id FROM bots WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1) AND active = TRUE"
+            )
+            .bind(tg_user_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+            for (bot_id,) in bot_ids {
+                self.enforce_free_plan_limit(bot_id, tg_user_id).await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn enforce_free_plan_limit(&self, bot_id: i32, owner_id: i64) -> Result<()> {
+        // На бесплатном тарифе может быть 1 модератор. Владельца не трогаем.
+        // Оставляем размороженным самого раннего добавленного модератора, остальных замораживаем.
+        sqlx::query(
+            "UPDATE admins SET frozen = TRUE
+             WHERE bot_id = $1
+             AND user_id != $2
+             AND id NOT IN (
+                 SELECT id FROM admins
+                 WHERE bot_id = $1
+                 AND user_id != $2
+                 ORDER BY id ASC
+                 LIMIT 1
+             )",
+        )
+        .bind(bot_id)
+        .bind(owner_id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 }

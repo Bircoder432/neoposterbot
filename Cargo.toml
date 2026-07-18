@@ -1,11 +1,11 @@
 [package]
 name = "posterbot_constructor"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 rust-version = "1.94.1"
 
 [dependencies]
-teloxide = { git = "https://github.com/teloxide/teloxide", default-features = false, features = ["rustls", "ctrlc_handler", "macros"] }
+teloxide = { version = "0.17.0", default-features = false, features = ["rustls", "ctrlc_handler", "macros"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "macros", "chrono", "migrate", "tls-rustls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
 tracing = "0.1"

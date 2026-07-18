@@ -44,9 +44,9 @@ impl L10n {
 
     pub fn add_admin_usage(l: Locale) -> &'static str {
         match l {
-            Locale::En => "📝 Usage: /addadmin <user_ID>\n\nExample: /addadmin 123456789",
+            Locale::En => "📝 Usage: /addadmin\n\nGenerates an invite link for a new admin.",
             Locale::Ru => {
-                "📝 Использование: /addadmin <ID_пользователя>\n\nПример: /addadmin 123456789"
+                "📝 Использование: /addadmin\n\nГенерирует пригласительную ссылку для нового администратора."
             }
         }
     }
@@ -76,6 +76,44 @@ impl L10n {
         }
     }
 
+    pub fn admin_added_frozen_notification(l: Locale) -> &'static str {
+        match l {
+            Locale::En => {
+                "🎉 You have been added as a moderator, but you are currently ❄️ FROZEN.\n\nThe bot owner needs to upgrade to Pro to unfreeze you."
+            }
+            Locale::Ru => {
+                "🎉 Вы были добавлены как модератор, но сейчас вы ❄️ ЗАМОРОЖЕНЫ.\n\nВладельцу бота нужно обновиться до Pro, чтобы разморозить вас."
+            }
+        }
+    }
+
+    pub fn admin_invite_link(l: Locale, link: &str) -> String {
+        match l {
+            Locale::En => format!(
+                "🔗 Send this link to the person you want to add as admin:\n\n{link}\n\nThe link is valid for 24 hours and can only be used once."
+            ),
+            Locale::Ru => format!(
+                "🔗 Отправьте эту ссылку человеку, которого хотите добавить как администратора:\n\n{link}\n\nСсылка действительна 24 часа и может быть использована только один раз."
+            ),
+        }
+    }
+
+    pub fn admin_invite_invalid(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ The invitation link is invalid, expired, or already used.",
+            Locale::Ru => {
+                "❌ Пригласительная ссылка недействительна, истекла или уже использована."
+            }
+        }
+    }
+
+    pub fn admin_invite_already_admin(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ You are already an admin of this bot.",
+            Locale::Ru => "❌ Вы уже являетесь администратором этого бота.",
+        }
+    }
+
     pub fn only_owner_remove_admins(l: Locale) -> &'static str {
         match l {
             Locale::En => "❌ Only the owner can remove admins.",
@@ -85,10 +123,8 @@ impl L10n {
 
     pub fn remove_admin_usage(l: Locale) -> &'static str {
         match l {
-            Locale::En => "📝 Usage: /removeadmin <user_ID>\n\nExample: /removeadmin 123456789",
-            Locale::Ru => {
-                "📝 Использование: /removeadmin <ID_пользователя>\n\nПример: /removeadmin 123456789"
-            }
+            Locale::En => "📝 Usage: /removeadmin <user_ID>",
+            Locale::Ru => "📝 Использование: /removeadmin <ID_пользователя>",
         }
     }
 
@@ -127,10 +163,59 @@ impl L10n {
         }
     }
 
+    pub fn no_admins_to_remove(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "No admins to remove. Only you (the owner) are in the list.",
+            Locale::Ru => "Нет администраторов для удаления. В списке только вы (владелец).",
+        }
+    }
+
+    pub fn admins_remove_hint(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "Tap a moderator to remove:",
+            Locale::Ru => "Нажмите на модератора, чтобы удалить:",
+        }
+    }
+
     pub fn admins_list_header(l: Locale, owner_id: i64) -> String {
         match l {
-            Locale::En => format!("📋 Moderators:\n\n👑 Owner: ID {owner_id}\n"),
-            Locale::Ru => format!("📋 Список модераторов:\n\n👑 Владелец: ID {owner_id}\n"),
+            Locale::En => format!("📋 Moderators:\n\n👑 Owner: ID {owner_id}\n\n"),
+            Locale::Ru => format!("📋 Список модераторов:\n\n👑 Владелец: ID {owner_id}\n\n"),
+        }
+    }
+
+    pub fn confirm_remove_admin(l: Locale, name: &str, id: i64) -> String {
+        match l {
+            Locale::En => format!("⚠️ Remove admin {name} (ID: {id})?"),
+            Locale::Ru => format!("⚠️ Удалить администратора {name} (ID: {id})?"),
+        }
+    }
+
+    pub fn confirm_yes(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Yes, remove",
+            Locale::Ru => "✅ Да, удалить",
+        }
+    }
+
+    pub fn confirm_no(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ Cancel",
+            Locale::Ru => "❌ Отмена",
+        }
+    }
+
+    pub fn back_to_list_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "⬅️ Back to list",
+            Locale::Ru => "⬅️ К списку",
+        }
+    }
+
+    pub fn back_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "⬅️ Back",
+            Locale::Ru => "⬅️ Назад",
         }
     }
 
@@ -333,10 +418,10 @@ impl L10n {
     pub fn owner_panel(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "👑 Owner Panel\n\nCommands:\n/addadmin <ID>\n/removeadmin <ID>\n/admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+                "👑 Owner Panel\n\nCommands:\n/addadmin — generate invite link\n/admins — manage admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
             }
             Locale::Ru => {
-                "👑 Панель владельца\n\nКоманды:\n/addadmin <ID>\n/removeadmin <ID>\n/admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+                "👑 Панель владельца\n\nКоманды:\n/addadmin — создать пригласительную ссылку\n/admins — управление администраторами\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
             }
         }
     }
@@ -426,14 +511,14 @@ impl L10n {
         }
     }
 
-    pub fn new_proposal_notif(l: Locale, id: &str, text: &str, media_type: &str) -> String {
+    pub fn new_proposal_notif(l: Locale, text: &str, media_type: &str) -> String {
         match l {
-            Locale::En => format!(
-                "📨 New proposal!\n\nID: {id}\n💬 {text}\n📁 Type: {media_type}\n\n/proposals"
-            ),
-            Locale::Ru => format!(
-                "📨 Новое предложение!\n\nID: {id}\n💬 {text}\n📁 Тип: {media_type}\n\n/proposals"
-            ),
+            Locale::En => {
+                format!("📨 New proposal!\n\n💬 {text}\n📁 Type: {media_type}\n\n/proposals")
+            }
+            Locale::Ru => {
+                format!("📨 Новое предложение!\n\n💬 {text}\n📁 Тип: {media_type}\n\n/proposals")
+            }
         }
     }
 
@@ -555,14 +640,11 @@ impl L10n {
 
     pub fn make_by(l: Locale, username: &str) -> String {
         match l {
-            Locale::En => {
-                format!("\nmake by {username}")
-            }
-            Locale::Ru => {
-                format!("\nсделано с помощью {username}")
-            }
+            Locale::En => format!("\nmake by {username}"),
+            Locale::Ru => format!("\nсделано с помощью {username}"),
         }
     }
+
     pub fn setup_checking(l: Locale) -> &'static str {
         match l {
             Locale::En => "🔍 Checking admin rights...",
@@ -622,6 +704,307 @@ impl L10n {
             Locale::Ru => format!(
                 "✅ Пользователь {name} добавлен как модератор, но ❄️ ЗАМОРОЖЕН.\n\nВы достигли лимита бесплатного тарифа. Обновите до Pro, чтобы разморозить модераторов."
             ),
+        }
+    }
+
+    // ── Master bot: clients management ──
+
+    pub fn clients_list_title(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "👥 Clients list",
+            Locale::Ru => "👥 Список клиентов",
+        }
+    }
+
+    pub fn clients_empty(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "No clients yet.",
+            Locale::Ru => "Клиентов пока нет.",
+        }
+    }
+
+    pub fn client_not_found(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ Client not found.",
+            Locale::Ru => "❌ Клиент не найден.",
+        }
+    }
+
+    pub fn client_details(
+        l: Locale,
+        tg_id: i64,
+        plan: &str,
+        expires: Option<&str>,
+        banned: bool,
+        bots_count: usize,
+    ) -> String {
+        let plan_str = match l {
+            Locale::En => match plan {
+                "pro" => match expires {
+                    Some(d) => format!("Pro (until {d})"),
+                    None => "Pro".to_string(),
+                },
+                _ => "Free".to_string(),
+            },
+            Locale::Ru => match plan {
+                "pro" => match expires {
+                    Some(d) => format!("Pro (до {d})"),
+                    None => "Pro".to_string(),
+                },
+                _ => "Free".to_string(),
+            },
+        };
+        let status_str = if banned {
+            match l {
+                Locale::En => "🚫 Banned",
+                Locale::Ru => "🚫 Забанен",
+            }
+        } else {
+            match l {
+                Locale::En => "✅ Active",
+                Locale::Ru => "✅ Активен",
+            }
+        };
+        let bots_label = match l {
+            Locale::En => "Bots",
+            Locale::Ru => "Ботов",
+        };
+        let id_label = match l {
+            Locale::En => "Telegram ID",
+            Locale::Ru => "Telegram ID",
+        };
+        let plan_label = match l {
+            Locale::En => "Plan",
+            Locale::Ru => "Тариф",
+        };
+        let status_label = match l {
+            Locale::En => "Status",
+            Locale::Ru => "Статус",
+        };
+        format!(
+            "👤 <b>Client</b>\n\n{id_label}: <code>{tg_id}</code>\n{plan_label}: {plan_str}\n{status_label}: {status_str}\n{bots_label}: {bots_count}"
+        )
+    }
+
+    pub fn ban_client_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🚫 Ban",
+            Locale::Ru => "🚫 Бан",
+        }
+    }
+
+    pub fn unban_client_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Unban",
+            Locale::Ru => "✅ Разбан",
+        }
+    }
+
+    pub fn change_plan_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🔄 Change plan",
+            Locale::Ru => "🔄 Изменить план",
+        }
+    }
+
+    pub fn client_bots_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🤖 Bots",
+            Locale::Ru => "🤖 Боты",
+        }
+    }
+
+    pub fn client_banned_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🚫 Client banned. Bots stopped.",
+            Locale::Ru => "🚫 Клиент забанен. Боты остановлены.",
+        }
+    }
+
+    pub fn client_unbanned_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Client unbanned. Bots restarted.",
+            Locale::Ru => "✅ Клиент разбанен. Боты перезапущены.",
+        }
+    }
+
+    pub fn plan_changed_pro_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Plan changed to Pro (30 days).",
+            Locale::Ru => "✅ План изменён на Pro (30 дней).",
+        }
+    }
+
+    pub fn plan_changed_free_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Plan changed to Free.",
+            Locale::Ru => "✅ План изменён на Free.",
+        }
+    }
+
+    pub fn client_bots_title(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🤖 Client's bots:",
+            Locale::Ru => "🤖 Боты клиента:",
+        }
+    }
+
+    pub fn no_bots_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "This client has no bots.",
+            Locale::Ru => "У этого клиента пока нет ботов.",
+        }
+    }
+
+    pub fn bot_info_text(l: Locale, username: &str, channel_display: &str, active: bool) -> String {
+        let active_str = if active {
+            match l {
+                Locale::En => "✅ Active",
+                Locale::Ru => "✅ Активен",
+            }
+        } else {
+            match l {
+                Locale::En => "❌ Inactive",
+                Locale::Ru => "❌ Неактивен",
+            }
+        };
+        let username_label = match l {
+            Locale::En => "Username",
+            Locale::Ru => "Юзернейм",
+        };
+        let channel_label = match l {
+            Locale::En => "Channel",
+            Locale::Ru => "Канал",
+        };
+        let status_label = match l {
+            Locale::En => "Status",
+            Locale::Ru => "Статус",
+        };
+        format!(
+            "🤖 <b>Bot info</b>\n\n{username_label}: @{username}\n{channel_label}: {channel_display}\n{status_label}: {active_str}"
+        )
+    }
+
+    pub fn channel_not_configured(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "Not configured",
+            Locale::Ru => "Не настроен",
+        }
+    }
+
+    pub fn master_help(l: Locale) -> &'static str {
+        match l {
+            Locale::En => {
+                "👑 Admin panel:\n\n/stats — service statistics\n/clients — clients list (with inline management)\n/setplan <user_id> <free|pro> — set plan manually\n/banclient <user_id> — ban a client"
+            }
+            Locale::Ru => {
+                "👑 Панель администратора:\n\n/stats — статистика сервиса\n/clients — список клиентов (с управлением через кнопки)\n/setplan <user_id> <free|pro> — выдать план вручную\n/banclient <user_id> — забанить клиента"
+            }
+        }
+    }
+
+    pub fn make_free(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🔄 Set Free",
+            Locale::Ru => "🔄 Сделать Free",
+        }
+    }
+
+    pub fn make_pro(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🔄 Set Pro",
+            Locale::Ru => "🔄 Сделать Pro",
+        }
+    }
+
+    pub fn revoke_invite_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🗑 Revoke link",
+            Locale::Ru => "🗑 Отозвать ссылку",
+        }
+    }
+
+    pub fn invite_revoked_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ Invitation link revoked.",
+            Locale::Ru => "❌ Пригласительная ссылка отозвана.",
+        }
+    }
+
+    pub fn admins_manage_hint(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "Tap a moderator to manage:",
+            Locale::Ru => "Нажмите на модератора, чтобы управлять им:",
+        }
+    }
+
+    pub fn admin_manage_title(l: Locale, name: &str, id: i64) -> String {
+        match l {
+            Locale::En => format!("⚙️ Manage moderator:\n\n{name} (ID: {id})"),
+            Locale::Ru => format!("⚙️ Управление модератором:\n\n{name} (ID: {id})"),
+        }
+    }
+
+    pub fn freeze_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❄️ Freeze",
+            Locale::Ru => "❄️ Заморозить",
+        }
+    }
+
+    pub fn unfreeze_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🔥 Unfreeze",
+            Locale::Ru => "🔥 Разморозить",
+        }
+    }
+
+    pub fn remove_btn(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "🗑 Remove",
+            Locale::Ru => "🗑 Удалить",
+        }
+    }
+
+    pub fn limit_reached_unfreeze(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ Free plan limit reached. Freeze another moderator or upgrade to Pro.",
+            Locale::Ru => {
+                "❌ Достигнут лимит бесплатного тарифа. Заморозьте другого модератора или обновитесь до Pro."
+            }
+        }
+    }
+
+    pub fn admin_frozen_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Moderator frozen.",
+            Locale::Ru => "✅ Модератор заморожен.",
+        }
+    }
+
+    pub fn admin_unfrozen_msg(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Moderator unfrozen.",
+            Locale::Ru => "✅ Модератор разморожен.",
+        }
+    }
+
+    // Добавьте эти методы в конец impl L10n
+    pub fn mod_frozen_panel(l: Locale) -> &'static str {
+        match l {
+            Locale::En => {
+                "🛠️ Moderator Panel\n\n⚠️ You are currently ❄️ FROZEN. You cannot perform moderation actions until the bot owner unfreezes you."
+            }
+            Locale::Ru => {
+                "🛠️ Панель модератора\n\n⚠️ Вы сейчас ❄️ ЗАМОРОЖЕНЫ. Вы не можете выполнять модераторские действия, пока владелец бота вас не разморозит."
+            }
+        }
+    }
+
+    pub fn mod_frozen_action(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ You are frozen and cannot perform this action.",
+            Locale::Ru => "❌ Вы заморожены и не можете выполнять это действие.",
         }
     }
 }

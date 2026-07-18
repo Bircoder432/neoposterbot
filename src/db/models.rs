@@ -8,6 +8,7 @@ pub struct Client {
     pub plan: String,
     pub pro_expires_at: Option<DateTime<Utc>>,
     pub banned: bool,
+    pub lang: String,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -21,6 +22,7 @@ pub struct BotConfig {
     pub active: bool,
     pub setup_complete: bool,
     pub setup_code: Option<String>,
+    pub channel_username: Option<String>,
     pub client_tg_id: Option<i64>,
 }
 
