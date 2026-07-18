@@ -366,7 +366,7 @@ impl Database {
     }
 
     pub async fn is_admin(&self, bot_id: i32, user_id: i64) -> Result<bool> {
-        let row: Option<(i64,)> = sqlx::query_as(
+        let row: Option<(i32,)> = sqlx::query_as(
             "SELECT 1 FROM admins a
              JOIN bots b ON a.bot_id = b.id
              JOIN clients c ON b.client_id = c.id
