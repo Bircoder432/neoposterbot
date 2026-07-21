@@ -48,8 +48,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
         return Ok(());
     }
 
-    // Вставьте этот блок в функцию handle_callback_query ПОСЛЕ блока if data.starts_with("setup_lang_") { ... } и ДО строки let lang = state.db.get_language(bot_id).await?;
-
     let lang = state.db.get_language(bot_id).await?;
 
     // Проверка на заморозку модератора
@@ -72,7 +70,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
         _ => return Ok(()),
     };
 
-    // ── Admin management callbacks (owner only) ──
     // ── Admin management callbacks (owner only) ──
     if data.starts_with("rmadmin_")
         || data.starts_with("confirm_rmadmin_")
@@ -148,7 +145,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         .db
                         .count_active_admins(state.bot_id, state.client_tg_id)
                         .await?;
-                    // Лимит: ровно 1 модератор
                     if count >= 1 {
                         bot.answer_callback_query(q.id.clone())
                             .text(L10n::limit_reached_unfreeze(lang))
@@ -250,11 +246,13 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
         let id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
         handle_reject(bot, chat_id, id, q, state, lang).await?;
     } else if let Some(id_str) = data.strip_prefix("reason_") {
-        let sender_id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
-        handle_reason(bot, chat_id, sender_id, q, state, lang).await?;
+        // ── FIX: используем msg_id (ID сообщения в БД) вместо sender_id ──
+        let msg_id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
+        handle_reason(bot, chat_id, msg_id, q, state, lang).await?;
     } else if let Some(id_str) = data.strip_prefix("ban_reason_") {
-        let sender_id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
-        handle_ban_reason(bot, chat_id, sender_id, q, state, lang).await?;
+        // ── FIX: используем msg_id (ID сообщения в БД) вместо sender_id ──
+        let msg_id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
+        handle_ban_reason(bot, chat_id, msg_id, q, state, lang).await?;
     }
     Ok(())
 }
@@ -354,24 +352,25 @@ async fn handle_reject(
         .get_message_by_id(state.bot_id, msg_id)
         .await?
         .ok_or_else(|| anyhow!("Message not found"))?;
-    let sender_id = msg.sender_id;
     let group_id = msg.proposal_group_id.clone();
 
     state
         .db
         .update_proposal_status(state.bot_id, &group_id, "rejected")
         .await?;
-    state.db.delete_proposal(state.bot_id, &group_id).await?;
+    // ── FIX: НЕ удаляем предложение из БД, чтобы позже можно было
+    //    найти sender_id по msg_id при обработке кнопок reason/ban_reason ──
 
     bot.answer_callback_query(q.id.clone())
         .text(L10n::rejected(lang))
         .await?;
     delete_callback_message(bot, chat_id, q).await?;
 
+    // ── FIX: используем msg_id (ID сообщения в БД) вместо sender_id ──
     let kb = InlineKeyboardMarkup::new(vec![vec![
-        InlineKeyboardButton::callback(L10n::reason_btn(lang), format!("reason_{sender_id}")),
+        InlineKeyboardButton::callback(L10n::reason_btn(lang), format!("reason_{msg_id}")),
         InlineKeyboardButton::callback(L10n::next_btn(lang), "next"),
-        InlineKeyboardButton::callback(L10n::ban_btn(lang), format!("ban_reason_{sender_id}")),
+        InlineKeyboardButton::callback(L10n::ban_btn(lang), format!("ban_reason_{msg_id}")),
     ]]);
 
     bot.send_message(chat_id, L10n::choose_action(lang))
@@ -383,12 +382,23 @@ async fn handle_reject(
 async fn handle_reason(
     bot: &Bot,
     chat_id: ChatId,
-    sender_id: i64,
+    msg_id: i64,
     q: &CallbackQuery,
     state: &WorkerState,
     lang: Locale,
 ) -> R {
     let admin_id = q.from.id.0 as i64;
+
+    // ── FIX: получаем sender_id из БД по msg_id, а не из callback_data ──
+    let msg = state.db.get_message_by_id(state.bot_id, msg_id).await?;
+    let sender_id = match msg {
+        Some(m) => m.sender_id,
+        None => {
+            bot.answer_callback_query(q.id.clone()).text("❌").await?;
+            return Ok(());
+        }
+    };
+
     bot.send_message(chat_id, L10n::enter_rejection_reason(lang))
         .await?;
     state
@@ -404,12 +414,23 @@ async fn handle_reason(
 async fn handle_ban_reason(
     bot: &Bot,
     chat_id: ChatId,
-    sender_id: i64,
+    msg_id: i64,
     q: &CallbackQuery,
     state: &WorkerState,
     lang: Locale,
 ) -> R {
     let admin_id = q.from.id.0 as i64;
+
+    // ── FIX: получаем sender_id из БД по msg_id, а не из callback_data ──
+    let msg = state.db.get_message_by_id(state.bot_id, msg_id).await?;
+    let sender_id = match msg {
+        Some(m) => m.sender_id,
+        None => {
+            bot.answer_callback_query(q.id.clone()).text("❌").await?;
+            return Ok(());
+        }
+    };
+
     bot.send_message(chat_id, L10n::enter_ban_reason(lang))
         .await?;
     state

@@ -162,7 +162,6 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
     Ok(())
 }
 
-// Замените функцию handle_proposals на эту:
 async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
@@ -180,7 +179,6 @@ async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     proposals::show_next_proposal(bot, msg.chat.id, state, lang).await
 }
 
-// Замените функцию handle_pardon на эту:
 async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
@@ -221,7 +219,6 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
     Ok(())
 }
 
-// Замените функцию handle_banned на эту:
 async fn handle_banned(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
