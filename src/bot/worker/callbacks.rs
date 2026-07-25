@@ -281,9 +281,15 @@ async fn handle_approve(
     };
 
     let reply_to = if let Some(parent_id) = proposal.first().parent_message_id {
-        match state.db.get_message_by_id(state.bot_id, parent_id).await? {
-            Some(parent) if parent.channel_message_id.is_some() => parent.channel_message_id,
-            _ => None,
+        if parent_id < 0 {
+            // Если ID отрицательный, это прямой ID поста из ссылки (ответ на любой пост канала)
+            Some((-parent_id) as i32)
+        } else {
+            // Если положительный — это классический ответ через функцию бота (ищем в БД)
+            match state.db.get_message_by_id(state.bot_id, parent_id).await? {
+                Some(parent) if parent.channel_message_id.is_some() => parent.channel_message_id,
+                _ => None,
+            }
         }
     } else {
         None

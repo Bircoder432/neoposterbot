@@ -1,5 +1,6 @@
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
+use tracing;
 
 use crate::bot::media;
 use crate::bot::worker::WorkerState;
@@ -33,8 +34,32 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
     }
 
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
-    let message_text = media::extract_message_text(msg, lang);
+    let mut message_text = media::extract_message_text(msg, lang);
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
+
+    // ── Фича: обработка прямых ссылок на посты канала ──
+    let mut parent_message_id = None;
+
+    let cfg = state.config.read().await;
+    let channel_id = cfg.channel_id;
+    let channel_username = cfg.channel_username.clone();
+
+    drop(cfg);
+
+    if !message_text.is_empty() {
+        if let Some(channel_msg_id) =
+            parse_and_strip_tme_link(&mut message_text, channel_id, channel_username.as_deref())
+        {
+            // Сохраняем как ОТРИЦАТЕЛЬНОЕ число, чтобы отметить, что это прямой ID поста, а не ID из БД
+            parent_message_id = Some(-(channel_msg_id as i64));
+        }
+    }
+
+    // Если после удаления ссылки остался только пробел/пустота, задаём минимальный текст
+    if media_type == "text" && message_text.trim().is_empty() {
+        message_text = " ".to_string();
+    }
+    // ── Конец фичи ──
 
     let proposal_group_id = media_group_id
         .clone()
@@ -50,16 +75,91 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
         media_file_id,
         media_group_id,
         proposal_group_id,
-        parent_message_id: None,
+        parent_message_id,
     };
 
     let inserted = state.db.save_message(&new_msg).await?;
     if inserted {
-        bot.send_message(chat_id, L10n::proposal_accepted(lang))
-            .await?;
+        // Отправляем пользователю уведомление о принятии ответа, если ссылка была найдена
+        if parent_message_id.is_some() {
+            bot.send_message(chat_id, L10n::reply_accepted(lang))
+                .await?;
+        } else {
+            bot.send_message(chat_id, L10n::proposal_accepted(lang))
+                .await?;
+        }
         notify_admins(bot, state, &new_msg, lang).await?;
     }
     Ok(())
+}
+
+// ── Вспомогательная функция для парсинга и удаления ссылок ──
+fn parse_and_strip_tme_link(
+    text: &mut String,
+    channel_id: i64,
+    channel_username: Option<&str>,
+) -> Option<i32> {
+    let lower_text = text.to_lowercase();
+    if let Some(pos) = lower_text.find("t.me/") {
+        // Определяем начало URL (включая http:// или https://)
+        let prefix_start = if pos >= 8 && &lower_text[pos - 8..pos] == "https://" {
+            pos - 8
+        } else if pos >= 7 && &lower_text[pos - 7..pos] == "http://" {
+            pos - 7
+        } else {
+            pos
+        };
+
+        // Находим конец URL (пробел или конец строки)
+        let url_end = lower_text[pos..]
+            .find(|c: char| c.is_whitespace())
+            .map(|e| pos + e)
+            .unwrap_or(lower_text.len());
+
+        // Парсим путь
+        let path = &lower_text[pos + 5..url_end]; // пропускаем "t.me/"
+        let path = path.split('?').next().unwrap_or(path); // убираем query параметры
+        let parts: Vec<&str> = path.split('/').collect();
+
+        let mut is_match = false;
+        let mut msg_id = 0;
+
+        if parts.len() >= 3 && parts[0] == "c" {
+            // Приватный канал: t.me/c/1234567890/5
+            let internal_id_str = parts[1];
+            let channel_id_str = channel_id.to_string();
+            // channel_id в Bot API имеет формат -1001234567890, в ссылке только 1234567890
+            let expected_internal_id = channel_id_str
+                .strip_prefix("-100")
+                .unwrap_or(&channel_id_str);
+
+            if expected_internal_id == internal_id_str {
+                if let Ok(id) = parts[2].parse::<i32>() {
+                    msg_id = id;
+                    is_match = true;
+                }
+            }
+        } else if parts.len() >= 2 {
+            // Публичный канал: t.me/username/5
+            let username_from_url = parts[0];
+            if let Some(uname) = channel_username {
+                if uname.eq_ignore_ascii_case(username_from_url) {
+                    if let Ok(id) = parts[1].parse::<i32>() {
+                        msg_id = id;
+                        is_match = true;
+                    }
+                }
+            }
+        }
+
+        // Если ссылка принадлежит нашему каналу, удаляем её из текста
+        if is_match {
+            text.replace_range(prefix_start..url_end, "");
+            *text = text.trim().to_string();
+            return Some(msg_id);
+        }
+    }
+    None
 }
 
 pub(super) async fn handle_reply_content(
