@@ -23,8 +23,6 @@ pub(super) async fn process_master_callback(
         _ => return Ok(()),
     };
 
-    // ── Existing client-facing callbacks ──
-
     if data == "add_bot" {
         state.flow_states.insert(user_id, FlowState::AwaitingToken);
         bot.send_message(
@@ -128,15 +126,12 @@ pub(super) async fn process_master_callback(
         return Ok(());
     }
 
-    // ── Master bot: clients management callbacks (owner only) ──
-
     if user_id != state.config.owner_id {
         return Ok(());
     }
 
     let lang = super::get_locale(state, user_id).await;
 
-    // Pagination for clients
     if let Some(page_str) = data.strip_prefix("clients_page_") {
         let page: i64 = page_str.parse().unwrap_or(0);
         ui::send_clients_page(bot, chat_id, state, page, lang).await?;
@@ -144,7 +139,6 @@ pub(super) async fn process_master_callback(
         return Ok(());
     }
 
-    // View client details
     if let Some(client_id_str) = data.strip_prefix("client_") {
         if let Ok(tg_id) = client_id_str.parse::<i64>() {
             ui::send_client_details(bot, chat_id, message_id, state, tg_id, lang).await?;
@@ -153,13 +147,11 @@ pub(super) async fn process_master_callback(
         }
     }
 
-    // Ban/Unban client
     if let Some(client_id_str) = data.strip_prefix("banclient_") {
         if let Ok(tg_id) = client_id_str.parse::<i64>() {
             let client = state.db.get_client_by_tg_id(tg_id).await?;
             if let Some(c) = client {
                 if c.banned {
-                    // Unban
                     let bots = state.db.unban_client(tg_id).await?;
                     for b in bots {
                         state.manager.start_worker(b).await;
@@ -168,7 +160,6 @@ pub(super) async fn process_master_callback(
                         .text(L10n::client_unbanned_msg(lang))
                         .await?;
                 } else {
-                    // Ban
                     let bot_ids = state.db.ban_client(tg_id).await?;
                     for bid in bot_ids {
                         state.manager.stop_worker(bid).await;
@@ -183,7 +174,6 @@ pub(super) async fn process_master_callback(
         }
     }
 
-    // Change plan
     if let Some(client_id_str) = data.strip_prefix("changeplan_") {
         if let Ok(tg_id) = client_id_str.parse::<i64>() {
             match state.db.toggle_client_plan(tg_id).await?.as_str() {
@@ -203,7 +193,6 @@ pub(super) async fn process_master_callback(
         }
     }
 
-    // View client's bots
     if let Some(client_id_str) = data.strip_prefix("clientbots_") {
         if let Ok(tg_id) = client_id_str.parse::<i64>() {
             ui::send_client_bots(bot, chat_id, message_id, state, tg_id, 0, lang).await?;
@@ -212,7 +201,6 @@ pub(super) async fn process_master_callback(
         }
     }
 
-    // Pagination for client's bots
     if let Some(parts) = data.strip_prefix("clientbots_page_") {
         if let Some((tg_id_str, page_str)) = parts.rsplit_once('_') {
             if let (Ok(tg_id), Ok(page)) = (tg_id_str.parse::<i64>(), page_str.parse::<i64>()) {
@@ -223,7 +211,6 @@ pub(super) async fn process_master_callback(
         }
     }
 
-    // View specific bot info
     if let Some(bot_id_str) = data.strip_prefix("botinfo_") {
         if let Ok(bot_id) = bot_id_str.parse::<i32>() {
             ui::send_bot_info(bot, chat_id, message_id, state, bot_id, lang).await?;

@@ -236,22 +236,57 @@ pub async fn publish(
         quoted
     };
 
-    let reply_text = L10n::reply_link_text(lang);
-    let reply_link = format!(
-        "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{}\">{reply_text}</a>",
-        first.id
-    );
     let watermark = if is_pro {
         ""
     } else {
         &L10n::make_by(lang, watermark_username)
     };
-    let caption = format!("{base}<i>{watermark}</i>{reply_link}");
-    if proposal.messages.len() == 1 {
-        publish_single(bot, channel_id, first, &caption, reply_to).await
+
+    let initial_caption = format!("{base}<i>{watermark}</i>");
+
+    let channel_msg_id = if proposal.messages.len() == 1 {
+        publish_single(bot, channel_id, first, &initial_caption, reply_to).await?
     } else {
-        publish_group(bot, channel_id, &proposal.messages, &caption).await
+        publish_group(bot, channel_id, &proposal.messages, &initial_caption).await?
+    };
+
+    if let Some(msg_id) = channel_msg_id {
+        let reply_text = L10n::reply_link_text(lang);
+        let reply_link = format!(
+            "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a>"
+        );
+        let final_caption = format!("{initial_caption}{reply_link}");
+
+        let _ = add_reply_link_to_post(bot, channel_id, msg_id, &final_caption, first).await;
     }
+
+    Ok(channel_msg_id)
+}
+
+async fn add_reply_link_to_post(
+    bot: &Bot,
+    channel_id: i64,
+    msg_id: i32,
+    final_caption: &str,
+    msg: &Message,
+) -> Result<()> {
+    let chat = ChatId(channel_id);
+    let media_type = msg.media_type.as_str();
+    let file_id = msg.media_file_id.as_str();
+
+    if media_type == "text" || file_id.is_empty() {
+        bot.edit_message_text(chat, MessageId(msg_id), final_caption)
+            .parse_mode(ParseMode::Html)
+            .link_preview_options(disabled_preview_options())
+            .await?;
+    } else if matches!(media_type, "sticker" | "video_note") {
+    } else {
+        bot.edit_message_caption(chat, MessageId(msg_id))
+            .caption(final_caption)
+            .parse_mode(ParseMode::Html)
+            .await?;
+    }
+    Ok(())
 }
 
 async fn publish_single(

@@ -1007,4 +1007,11 @@ impl L10n {
             Locale::Ru => "❌ Вы заморожены и не можете выполнять это действие.",
         }
     }
+
+    pub fn already_processing(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "⏳ This proposal is already being processed.",
+            Locale::Ru => "⏳ Это предложение уже обрабатывается.",
+        }
+    }
 }

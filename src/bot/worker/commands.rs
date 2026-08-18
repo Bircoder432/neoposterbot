@@ -60,7 +60,6 @@ async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args
 }
 
 // Замените функцию handle_start на эту:
-// Замените функцию handle_start на эту:
 async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
@@ -72,16 +71,11 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
     }
 
     if let Some(parent_id_str) = args.strip_prefix("reply_") {
-        if let Ok(parent_id) = parent_id_str.parse::<i64>() {
-            if state
-                .db
-                .get_message_by_id(state.bot_id, parent_id)
-                .await?
-                .is_some()
-            {
+        if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
+            if channel_msg_id > 0 {
                 state
                     .db
-                    .set_user_state(state.bot_id, user_id, "reply_mode", parent_id)
+                    .set_user_state(state.bot_id, user_id, "reply_mode", channel_msg_id as i64)
                     .await?;
                 bot.send_message(chat_id, L10n::send_reply_to_post(lang))
                     .await?;
@@ -133,7 +127,8 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
         return Ok(());
     }
 
-    let parent_id: i64 = match args.trim().parse() {
+    // Argument is now the native channel_message_id — no DB lookup needed.
+    let channel_msg_id: i32 = match args.trim().parse() {
         Ok(id) if id > 0 => id,
         _ => {
             bot.send_message(msg.chat.id, L10n::reply_usage(lang))
@@ -142,20 +137,9 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
         }
     };
 
-    if state
-        .db
-        .get_message_by_id(state.bot_id, parent_id)
-        .await?
-        .is_none()
-    {
-        bot.send_message(msg.chat.id, L10n::post_not_found(lang))
-            .await?;
-        return Ok(());
-    }
-
     state
         .db
-        .set_user_state(state.bot_id, user_id, "reply_mode", parent_id)
+        .set_user_state(state.bot_id, user_id, "reply_mode", channel_msg_id as i64)
         .await?;
     bot.send_message(msg.chat.id, L10n::send_reply_to_post(lang))
         .await?;

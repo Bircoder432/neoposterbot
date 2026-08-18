@@ -25,13 +25,6 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
     if !utils::has_content(msg) {
         return Ok(());
     }
-    if state
-        .db
-        .message_exists(state.bot_id, chat_id.0, msg.id.0 as i32)
-        .await?
-    {
-        return Ok(());
-    }
 
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let mut message_text = media::extract_message_text(msg, lang);
@@ -50,8 +43,7 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
         if let Some(channel_msg_id) =
             parse_and_strip_tme_link(&mut message_text, channel_id, channel_username.as_deref())
         {
-            // Сохраняем как ОТРИЦАТЕЛЬНОЕ число, чтобы отметить, что это прямой ID поста, а не ID из БД
-            parent_message_id = Some(-(channel_msg_id as i64));
+            parent_message_id = Some(channel_msg_id as i64);
         }
     }
 
@@ -171,15 +163,6 @@ pub(super) async fn handle_reply_content(
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
-
-    if state
-        .db
-        .message_exists(state.bot_id, chat_id.0, msg.id.0 as i32)
-        .await?
-    {
-        state.db.clear_user_state(state.bot_id, user_id).await?;
-        return Ok(());
-    }
 
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let message_text = media::extract_message_text(msg, lang);

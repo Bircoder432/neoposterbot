@@ -545,7 +545,6 @@ impl Database {
         }
     }
 
-    // Новый метод для отзыва ссылки
     pub async fn revoke_admin_invite(&self, bot_id: i32, code: &str) -> Result<()> {
         sqlx::query("DELETE FROM admin_invites WHERE bot_id = $1 AND code = $2")
             .bind(bot_id)
@@ -555,7 +554,6 @@ impl Database {
         Ok(())
     }
 
-    // Новый метод для изменения статуса заморозки
     pub async fn set_admin_frozen(&self, bot_id: i32, user_id: i64, frozen: bool) -> Result<()> {
         sqlx::query("UPDATE admins SET frozen = $1 WHERE bot_id = $2 AND user_id = $3")
             .bind(frozen)
@@ -591,7 +589,6 @@ impl Database {
         let plan = self.get_client_plan_by_bot_id(bot_id).await?;
         if plan == "free" {
             let active_count = self.count_active_admins(bot_id, owner_id).await?;
-            // Лимит: ровно 1 модератор на бесплатном тарифе
             if active_count > 1 {
                 self.enforce_free_plan_limit(bot_id, owner_id).await?;
             }
@@ -611,7 +608,6 @@ impl Database {
             .execute(&self.pool)
             .await?;
 
-            // Замораживаем лишних модераторов во всех ботах клиента
             let bot_ids: Vec<(i32,)> = sqlx::query_as(
                 "SELECT id FROM bots WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1) AND active = TRUE"
             )
@@ -627,8 +623,6 @@ impl Database {
     }
 
     pub async fn enforce_free_plan_limit(&self, bot_id: i32, owner_id: i64) -> Result<()> {
-        // На бесплатном тарифе может быть 1 модератор. Владельца не трогаем.
-        // Оставляем размороженным самого раннего добавленного модератора, остальных замораживаем.
         sqlx::query(
             "UPDATE admins SET frozen = TRUE
              WHERE bot_id = $1
@@ -643,6 +637,56 @@ impl Database {
         )
         .bind(bot_id)
         .bind(owner_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    // ── Atomic publishing helpers ──
+
+    /// Atomically claim a proposal for publishing.
+    /// Returns true if this caller won the claim (rows_affected > 0).
+    pub async fn claim_proposal_for_publishing(&self, bot_id: i32, group_id: &str) -> Result<bool> {
+        let res = sqlx::query(
+            "UPDATE messages SET status = 'publishing' \
+             WHERE bot_id = $1 AND proposal_group_id = $2 AND status = 'pending'",
+        )
+        .bind(bot_id)
+        .bind(group_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    /// Finalize a successfully published proposal: set status='approved'
+    /// and store the native channel message id.
+    pub async fn finalize_published(
+        &self,
+        bot_id: i32,
+        group_id: &str,
+        channel_msg_id: i32,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE messages \
+             SET status = 'approved', channel_message_id = $1 \
+             WHERE bot_id = $2 AND proposal_group_id = $3",
+        )
+        .bind(channel_msg_id)
+        .bind(bot_id)
+        .bind(group_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Revert a failed publish back to pending so it can be retried.
+    pub async fn revert_to_pending(&self, bot_id: i32, group_id: &str) -> Result<()> {
+        sqlx::query(
+            "UPDATE messages SET status = 'pending' \
+             WHERE bot_id = $1 AND proposal_group_id = $2 AND status = 'publishing'",
+        )
+        .bind(bot_id)
+        .bind(group_id)
         .execute(&self.pool)
         .await?;
         Ok(())

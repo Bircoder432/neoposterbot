@@ -271,6 +271,19 @@ async fn handle_approve(
         .await?
         .ok_or_else(|| anyhow!("Message not found"))?;
     let group_id = msg.proposal_group_id.clone();
+
+    // ── ATOMIC: claim the proposal so concurrent clicks cannot double-publish ──
+    let claimed = state
+        .db
+        .claim_proposal_for_publishing(state.bot_id, &group_id)
+        .await?;
+    if !claimed {
+        bot.answer_callback_query(q.id.clone())
+            .text(L10n::already_processing(lang))
+            .await?;
+        return Ok(());
+    }
+
     let messages = state
         .db
         .get_proposal_by_group_id(state.bot_id, &group_id)
@@ -280,18 +293,8 @@ async fn handle_approve(
         messages,
     };
 
-    let reply_to = if let Some(parent_id) = proposal.first().parent_message_id {
-        if parent_id < 0 {
-            Some((-parent_id) as i32)
-        } else {
-            match state.db.get_message_by_id(state.bot_id, parent_id).await? {
-                Some(parent) if parent.channel_message_id.is_some() => parent.channel_message_id,
-                _ => None,
-            }
-        }
-    } else {
-        None
-    };
+    // parent_message_id now stores the native channel_message_id directly.
+    let reply_to = proposal.first().parent_message_id.map(|id| id as i32);
 
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
@@ -316,11 +319,7 @@ async fn handle_approve(
         Ok(Some(channel_msg_id)) => {
             state
                 .db
-                .update_channel_message_id(state.bot_id, &group_id, channel_msg_id)
-                .await?;
-            state
-                .db
-                .update_proposal_status(state.bot_id, &group_id, "approved")
+                .finalize_published(state.bot_id, &group_id, channel_msg_id)
                 .await?;
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::published(lang))
@@ -329,12 +328,15 @@ async fn handle_approve(
             proposals::show_next_proposal(bot, chat_id, state, lang).await?;
         }
         Ok(None) => {
+            // No message id returned — revert so the proposal can be retried.
+            state.db.revert_to_pending(state.bot_id, &group_id).await?;
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::published_no_id(lang))
                 .await?;
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to publish proposal");
+            state.db.revert_to_pending(state.bot_id, &group_id).await?;
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::failed_publish(lang))
                 .await?;
