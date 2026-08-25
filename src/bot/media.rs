@@ -289,6 +289,38 @@ async fn add_reply_link_to_post(
     Ok(())
 }
 
+/// Add a reply button (deep-link) to an existing channel post.
+///
+/// `forwarded_msg` is a Telegram message obtained e.g. via `forward_message`,
+/// used to determine whether the original post is a text message or a media
+/// message (which determines `edit_message_text` vs `edit_message_caption`).
+pub async fn add_reply_to_channel_post(
+    bot: &Bot,
+    channel_id: i64,
+    msg_id: i32,
+    new_caption: &str,
+    forwarded_msg: &TgMessage,
+) -> Result<()> {
+    let chat = ChatId(channel_id);
+
+    if forwarded_msg.sticker().is_some() || forwarded_msg.video_note().is_some() {
+        anyhow::bail!("Cannot add reply button to sticker or video note posts");
+    }
+
+    if forwarded_msg.text().is_some() {
+        bot.edit_message_text(chat, MessageId(msg_id), new_caption)
+            .parse_mode(ParseMode::Html)
+            .link_preview_options(disabled_preview_options())
+            .await?;
+    } else {
+        bot.edit_message_caption(chat, MessageId(msg_id))
+            .caption(new_caption)
+            .parse_mode(ParseMode::Html)
+            .await?;
+    }
+    Ok(())
+}
+
 async fn publish_single(
     bot: &Bot,
     channel_id: i64,

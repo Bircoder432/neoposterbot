@@ -64,7 +64,6 @@ pub(super) async fn handle_admin_invite(
     Ok(())
 }
 
-// ── /addadmin — generates an invite deeplink ──
 pub(super) async fn handle_add_admin(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
@@ -96,7 +95,6 @@ pub(super) async fn handle_add_admin(bot: &Bot, msg: &Message, state: &WorkerSta
     Ok(())
 }
 
-// ── /admins — shows inline keyboard for removal ──
 pub(super) async fn handle_admins(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;

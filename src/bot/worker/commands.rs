@@ -1,8 +1,10 @@
 use teloxide::prelude::*;
+use teloxide::types::MessageId;
 
 use super::admins;
 use super::proposals;
 use super::utils;
+use crate::bot::media;
 use crate::bot::worker::WorkerState;
 use crate::locales::{L10n, Locale};
 
@@ -26,6 +28,7 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
         "banned" => handle_banned(bot, msg, state).await,
         "pardon" => handle_pardon(bot, msg, state, args).await,
         "reply" => handle_reply_command(bot, msg, state, args).await,
+        "addreplies" => handle_add_replies(bot, msg, state, args).await,
         "lang" => handle_set_language(bot, msg, state, args).await,
         _ => Ok(()),
     }
@@ -59,13 +62,11 @@ async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args
     Ok(())
 }
 
-// Замените функцию handle_start на эту:
 async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
 
-    // ── Admin invite deeplink ──
     if let Some(code) = args.strip_prefix("admin_") {
         return admins::handle_admin_invite(bot, chat_id, user_id, code, state, lang).await;
     }
@@ -92,11 +93,9 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
         return Ok(());
     }
 
-    // Логика разделения панелей
     if state.client_tg_id == user_id {
         bot.send_message(chat_id, L10n::owner_panel(lang)).await?;
     } else if utils::is_authorized(state, user_id).await? {
-        // Это модератор (не владелец)
         if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
             bot.send_message(chat_id, L10n::mod_frozen_panel(lang))
                 .await?;
@@ -104,14 +103,12 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
             bot.send_message(chat_id, L10n::mod_panel(lang)).await?;
         }
     } else {
-        // Обычный пользователь
         bot.send_message(chat_id, L10n::welcome(lang)).await?;
     }
 
     Ok(())
 }
 
-// Замените функцию handle_reply_command на эту:
 async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
@@ -127,7 +124,6 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
         return Ok(());
     }
 
-    // Argument is now the native channel_message_id — no DB lookup needed.
     let channel_msg_id: i32 = match args.trim().parse() {
         Ok(id) if id > 0 => id,
         _ => {
@@ -236,5 +232,124 @@ async fn handle_banned(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
         ));
     }
     bot.send_message(msg.chat.id, list).await?;
+    Ok(())
+}
+
+fn parse_post_link(link: &str) -> Option<i32> {
+    let lower = link.to_lowercase();
+    let pos = lower.find("t.me/")?;
+    let path = &lower[pos + 5..];
+    let path = path.split('?').next().unwrap_or(path);
+    let parts: Vec<&str> = path.split('/').collect();
+
+    if parts.len() >= 3 && parts[0] == "c" {
+        // Private channel: t.me/c/1234567890/5
+        parts[2].parse::<i32>().ok()
+    } else if parts.len() >= 2 {
+        // Public channel: t.me/username/5
+        parts[1].parse::<i32>().ok()
+    } else {
+        None
+    }
+}
+
+async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
+    let user_id = msg.from.as_ref().unwrap().id.0 as i64;
+    let lang = state.db.get_language(state.bot_id).await?;
+
+    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
+        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+            .await?;
+        return Ok(());
+    }
+
+    if !utils::is_authorized(state, user_id).await? {
+        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        return Ok(());
+    }
+
+    let link = args.trim();
+    if link.is_empty() {
+        bot.send_message(msg.chat.id, L10n::addreplies_usage(lang))
+            .await?;
+        return Ok(());
+    }
+
+    let channel_msg_id = match parse_post_link(link) {
+        Some(id) if id > 0 => id,
+        _ => {
+            bot.send_message(msg.chat.id, L10n::addreplies_invalid_link(lang))
+                .await?;
+            return Ok(());
+        }
+    };
+
+    let cfg = state.config.read().await;
+    let channel_id = cfg.channel_id;
+    let bot_username = cfg.bot_username.clone();
+    drop(cfg);
+
+    // Forward the channel post to the admin's private chat to read its content
+    let forwarded = bot
+        .forward_message(
+            ChatId(user_id),
+            ChatId(channel_id),
+            MessageId(channel_msg_id),
+        )
+        .await;
+
+    let forwarded = match forwarded {
+        Ok(m) => m,
+        Err(e) => {
+            bot.send_message(
+                msg.chat.id,
+                L10n::addreplies_failed_get(lang, &e.to_string()),
+            )
+            .await?;
+            return Ok(());
+        }
+    };
+
+    // Extract current text or caption
+    let current_text = forwarded
+        .text()
+        .map(|s| s.to_string())
+        .or_else(|| forwarded.caption().map(|s| s.to_string()))
+        .unwrap_or_default();
+
+    // Delete the temporary forwarded message
+    let _ = bot.delete_message(ChatId(user_id), forwarded.id).await;
+
+    // Check if a reply link is already present
+    if current_text.contains("start=reply_") {
+        bot.send_message(msg.chat.id, L10n::addreplies_already_exists(lang))
+            .await?;
+        return Ok(());
+    }
+
+    // Build the reply link and append it to the existing caption
+    let reply_text = L10n::reply_link_text(lang);
+    let reply_link = format!(
+        "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
+    );
+    let new_text = format!("{current_text}{reply_link}");
+
+    // Edit the original channel post
+    match media::add_reply_to_channel_post(bot, channel_id, channel_msg_id, &new_text, &forwarded)
+        .await
+    {
+        Ok(()) => {
+            bot.send_message(msg.chat.id, L10n::addreplies_success(lang))
+                .await?;
+        }
+        Err(e) => {
+            bot.send_message(
+                msg.chat.id,
+                L10n::addreplies_failed_edit(lang, &e.to_string()),
+            )
+            .await?;
+        }
+    }
+
     Ok(())
 }

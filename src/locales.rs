@@ -418,10 +418,10 @@ impl L10n {
     pub fn owner_panel(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "👑 Owner Panel\n\nCommands:\n/addadmin — generate invite link\n/admins — manage admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+                "👑 Owner Panel\n\nCommands:\n/addadmin — generate invite link\n/admins — manage admins\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/addreplies <post_link>\n/lang <en|ru>"
             }
             Locale::Ru => {
-                "👑 Панель владельца\n\nКоманды:\n/addadmin — создать пригласительную ссылку\n/admins — управление администраторами\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+                "👑 Панель владельца\n\nКоманды:\n/addadmin — создать пригласительную ссылку\n/admins — управление администраторами\n/banned\n/proposals\n/pardon <BAN-ID>\n/reply <ID>\n/addreplies <ссылка_на_пост>\n/lang <en|ru>"
             }
         }
     }
@@ -429,10 +429,10 @@ impl L10n {
     pub fn mod_panel(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "🛠️ Moderator Panel\n\nCommands:\n/proposals\n/banned\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+                "🛠️ Moderator Panel\n\nCommands:\n/proposals\n/banned\n/pardon <BAN-ID>\n/reply <ID>\n/addreplies <post_link>\n/lang <en|ru>"
             }
             Locale::Ru => {
-                "🛠️ Панель модератора\n\nКоманды:\n/proposals\n/banned\n/pardon <BAN-ID>\n/reply <ID>\n/lang <en|ru>"
+                "🛠️ Панель модератора\n\nКоманды:\n/proposals\n/banned\n/pardon <BAN-ID>\n/reply <ID>\n/addreplies <ссылка_на_пост>\n/lang <en|ru>"
             }
         }
     }
@@ -1012,6 +1012,55 @@ impl L10n {
         match l {
             Locale::En => "⏳ This proposal is already being processed.",
             Locale::Ru => "⏳ Это предложение уже обрабатывается.",
+        }
+    }
+
+    pub fn send_command_in_your_channel(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "Send command in your channel:",
+            Locale::Ru => "Отправьте в ваш канал команду:",
+        }
+    }
+
+    pub fn addreplies_usage(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "📝 Usage: /addreplies <post_link>\n\nExample: /addreplies https://t.me/c/1234567890/5",
+            Locale::Ru => "📝 Использование: /addreplies <ссылка_на_пост>\n\nПример: /addreplies https://t.me/c/1234567890/5",
+        }
+    }
+
+    pub fn addreplies_invalid_link(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ Invalid post link. Use format: https://t.me/c/CHANNEL_ID/MESSAGE_ID or https://t.me/CHANNEL_USERNAME/MESSAGE_ID",
+            Locale::Ru => "❌ Неверная ссылка на пост. Используйте формат: https://t.me/c/ID_КАНАЛА/ID_СООБЩЕНИЯ или https://t.me/ЮЗЕРНЕЙМ_КАНАЛА/ID_СООБЩЕНИЯ",
+        }
+    }
+
+    pub fn addreplies_already_exists(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "ℹ️ This post already has a reply button.",
+            Locale::Ru => "ℹ️ У этого поста уже есть кнопка ответа.",
+        }
+    }
+
+    pub fn addreplies_success(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "✅ Reply button added to the post!",
+            Locale::Ru => "✅ Кнопка ответа добавлена к посту!",
+        }
+    }
+
+    pub fn addreplies_failed_get(l: Locale, e: &str) -> String {
+        match l {
+            Locale::En => format!("❌ Failed to get post: {e}"),
+            Locale::Ru => format!("❌ Не удалось получить пост: {e}"),
+        }
+    }
+
+    pub fn addreplies_failed_edit(l: Locale, e: &str) -> String {
+        match l {
+            Locale::En => format!("❌ Failed to edit post: {e}"),
+            Locale::Ru => format!("❌ Не удалось изменить пост: {e}"),
         }
     }
 }
