@@ -86,7 +86,8 @@ fn parse_and_strip_tme_link(
     channel_id: i64,
     channel_username: Option<&str>,
 ) -> Option<i32> {
-    let lower_text = text.to_lowercase();
+    let lower_text = text.to_ascii_lowercase();
+
     if let Some(pos) = lower_text.find("t.me/") {
         let prefix_start = if pos >= 8 && &lower_text[pos - 8..pos] == "https://" {
             pos - 8
