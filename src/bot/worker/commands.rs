@@ -243,10 +243,8 @@ fn parse_post_link(link: &str) -> Option<i32> {
     let parts: Vec<&str> = path.split('/').collect();
 
     if parts.len() >= 3 && parts[0] == "c" {
-        // Private channel: t.me/c/1234567890/5
         parts[2].parse::<i32>().ok()
     } else if parts.len() >= 2 {
-        // Public channel: t.me/username/5
         parts[1].parse::<i32>().ok()
     } else {
         None
@@ -289,7 +287,6 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
     let bot_username = cfg.bot_username.clone();
     drop(cfg);
 
-    // Forward the channel post to the admin's private chat to read its content
     let forwarded = bot
         .forward_message(
             ChatId(user_id),
@@ -310,31 +307,26 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
         }
     };
 
-    // Extract current text or caption
     let current_text = forwarded
         .text()
         .map(|s| s.to_string())
         .or_else(|| forwarded.caption().map(|s| s.to_string()))
         .unwrap_or_default();
 
-    // Delete the temporary forwarded message
     let _ = bot.delete_message(ChatId(user_id), forwarded.id).await;
 
-    // Check if a reply link is already present
     if current_text.contains("start=reply_") {
         bot.send_message(msg.chat.id, L10n::addreplies_already_exists(lang))
             .await?;
         return Ok(());
     }
 
-    // Build the reply link and append it to the existing caption
     let reply_text = L10n::reply_link_text(lang);
     let reply_link = format!(
         "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
     );
     let new_text = format!("{current_text}{reply_link}");
 
-    // Edit the original channel post
     match media::add_reply_to_channel_post(bot, channel_id, channel_msg_id, &new_text, &forwarded)
         .await
     {

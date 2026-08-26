@@ -707,8 +707,6 @@ impl L10n {
         }
     }
 
-    // ── Master bot: clients management ──
-
     pub fn clients_list_title(l: Locale) -> &'static str {
         match l {
             Locale::En => "👥 Clients list",
@@ -989,7 +987,6 @@ impl L10n {
         }
     }
 
-    // Добавьте эти методы в конец impl L10n
     pub fn mod_frozen_panel(l: Locale) -> &'static str {
         match l {
             Locale::En => {
@@ -1024,15 +1021,23 @@ impl L10n {
 
     pub fn addreplies_usage(l: Locale) -> &'static str {
         match l {
-            Locale::En => "📝 Usage: /addreplies <post_link>\n\nExample: /addreplies https://t.me/c/1234567890/5",
-            Locale::Ru => "📝 Использование: /addreplies <ссылка_на_пост>\n\nПример: /addreplies https://t.me/c/1234567890/5",
+            Locale::En => {
+                "📝 Usage: /addreplies <post_link>\n\nExample: /addreplies https://t.me/c/1234567890/5"
+            }
+            Locale::Ru => {
+                "📝 Использование: /addreplies <ссылка_на_пост>\n\nПример: /addreplies https://t.me/c/1234567890/5"
+            }
         }
     }
 
     pub fn addreplies_invalid_link(l: Locale) -> &'static str {
         match l {
-            Locale::En => "❌ Invalid post link. Use format: https://t.me/c/CHANNEL_ID/MESSAGE_ID or https://t.me/CHANNEL_USERNAME/MESSAGE_ID",
-            Locale::Ru => "❌ Неверная ссылка на пост. Используйте формат: https://t.me/c/ID_КАНАЛА/ID_СООБЩЕНИЯ или https://t.me/ЮЗЕРНЕЙМ_КАНАЛА/ID_СООБЩЕНИЯ",
+            Locale::En => {
+                "❌ Invalid post link. Use format: https://t.me/c/CHANNEL_ID/MESSAGE_ID or https://t.me/CHANNEL_USERNAME/MESSAGE_ID"
+            }
+            Locale::Ru => {
+                "❌ Неверная ссылка на пост. Используйте формат: https://t.me/c/ID_КАНАЛА/ID_СООБЩЕНИЯ или https://t.me/ЮЗЕРНЕЙМ_КАНАЛА/ID_СООБЩЕНИЯ"
+            }
         }
     }
 

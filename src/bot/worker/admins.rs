@@ -46,7 +46,6 @@ pub(super) async fn handle_admin_invite(
                     .await?;
             }
 
-            // Notify the owner
             let owner_msg = if frozen {
                 L10n::admin_added_frozen(lang, &user_name)
             } else {

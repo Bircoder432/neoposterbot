@@ -51,7 +51,6 @@ pub(super) async fn send_clients_page(
         )]);
     }
 
-    // Pagination buttons
     let mut nav_row = vec![];
     if current_page > 0 {
         nav_row.push(InlineKeyboardButton::callback(
@@ -193,8 +192,6 @@ pub(super) async fn send_client_bots(
             format!("botinfo_{}", b.id),
         )]);
     }
-
-    // Pagination
     let mut nav_row = vec![];
     if current_page > 0 {
         nav_row.push(InlineKeyboardButton::callback(
@@ -212,7 +209,6 @@ pub(super) async fn send_client_bots(
         keyboard.push(nav_row);
     }
 
-    // Back button
     keyboard.push(vec![InlineKeyboardButton::callback(
         L10n::back_btn(lang),
         format!("client_{}", tg_id),
@@ -235,10 +231,6 @@ pub(super) async fn send_bot_info(
     bot_id: i32,
     lang: Locale,
 ) -> R {
-    // Since we don't have a direct get_bot_by_id, we can query all bots and find it.
-    // In a real app, add get_bot_by_id to repository.
-    // For simplicity, let's use a raw query or iterate.
-    // Let's add a quick raw query here.
     let pool = &state.db.pool;
     let bot_cfg: Option<crate::db::models::BotConfig> = sqlx::query_as(
         "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.id = $1"

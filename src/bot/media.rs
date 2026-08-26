@@ -289,11 +289,6 @@ async fn add_reply_link_to_post(
     Ok(())
 }
 
-/// Add a reply button (deep-link) to an existing channel post.
-///
-/// `forwarded_msg` is a Telegram message obtained e.g. via `forward_message`,
-/// used to determine whether the original post is a text message or a media
-/// message (which determines `edit_message_text` vs `edit_message_caption`).
 pub async fn add_reply_to_channel_post(
     bot: &Bot,
     channel_id: i64,

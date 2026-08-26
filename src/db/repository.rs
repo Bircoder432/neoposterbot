@@ -511,8 +511,6 @@ impl Database {
         Ok(())
     }
 
-    // ── Admin invite methods ──
-
     pub async fn create_admin_invite(&self, bot_id: i32) -> Result<String> {
         let code = uuid::Uuid::new_v4().simple().to_string()[..8].to_uppercase();
         sqlx::query("INSERT INTO admin_invites (bot_id, code) VALUES ($1, $2)")
@@ -642,10 +640,6 @@ impl Database {
         Ok(())
     }
 
-    // ── Atomic publishing helpers ──
-
-    /// Atomically claim a proposal for publishing.
-    /// Returns true if this caller won the claim (rows_affected > 0).
     pub async fn claim_proposal_for_publishing(&self, bot_id: i32, group_id: &str) -> Result<bool> {
         let res = sqlx::query(
             "UPDATE messages SET status = 'publishing' \
@@ -658,8 +652,6 @@ impl Database {
         Ok(res.rows_affected() > 0)
     }
 
-    /// Finalize a successfully published proposal: set status='approved'
-    /// and store the native channel message id.
     pub async fn finalize_published(
         &self,
         bot_id: i32,
@@ -679,7 +671,6 @@ impl Database {
         Ok(())
     }
 
-    /// Revert a failed publish back to pending so it can be retried.
     pub async fn revert_to_pending(&self, bot_id: i32, group_id: &str) -> Result<()> {
         sqlx::query(
             "UPDATE messages SET status = 'pending' \
