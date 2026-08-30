@@ -23,7 +23,12 @@ impl Database {
         Ok(())
     }
 
-    // ================= clients =================
+    pub fn new_ban_id() -> String {
+        format!(
+            "BAN-{}",
+            &uuid::Uuid::new_v4().simple().to_string().to_uppercase()[..6]
+        )
+    }
 
     pub async fn get_all_clients(&self) -> Result<Vec<Client>> {
         Ok(sqlx::query_as("SELECT * FROM clients WHERE banned = FALSE")
@@ -192,8 +197,6 @@ impl Database {
         Ok(row.map(|(p,)| p).unwrap_or_else(|| "free".to_string()))
     }
 
-    // ================= bots =================
-
     pub async fn get_all_bots(&self) -> Result<Vec<BotConfig>> {
         Ok(sqlx::query_as("SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.active = TRUE")
             .fetch_all(&self.pool).await?)
@@ -303,14 +306,13 @@ impl Database {
         Ok(())
     }
 
-    // ================= bans (только хеши) =================
-
-    /// Банит пользователя по хешу его id и возвращает ban_id для /pardon.
-    pub async fn ban_user(&self, bot_id: i32, user_hash: &str, reason: &str) -> Result<String> {
-        let ban_id = format!(
-            "BAN-{}",
-            &uuid::Uuid::new_v4().simple().to_string().to_uppercase()[..6]
-        );
+    pub async fn ban_user(
+        &self,
+        bot_id: i32,
+        user_hash: &str,
+        reason: &str,
+        ban_id: &str,
+    ) -> Result<()> {
         let now = Utc::now();
         sqlx::query(
             "INSERT INTO bans (bot_id, ban_id, user_hash, reason, created_at, active)
@@ -322,13 +324,13 @@ impl Database {
                  active = TRUE",
         )
         .bind(bot_id)
-        .bind(&ban_id)
+        .bind(ban_id)
         .bind(user_hash)
         .bind(reason)
         .bind(now)
         .execute(&self.pool)
         .await?;
-        Ok(ban_id)
+        Ok(())
     }
 
     pub async fn is_banned(&self, bot_id: i32, user_hash: &str) -> Result<bool> {
@@ -342,8 +344,6 @@ impl Database {
         Ok(row.is_some())
     }
 
-    /// Разбан по ban_id. Возвращает запись, если бан был активен.
-    /// Сырой user_id мы не храним, поэтому уведомить юзера невозможно.
     pub async fn pardon_by_ban_id(&self, bot_id: i32, ban_id: &str) -> Result<Option<BanRecord>> {
         Ok(sqlx::query_as(
             "UPDATE bans SET active = FALSE
@@ -365,8 +365,6 @@ impl Database {
         .fetch_all(&self.pool)
         .await?)
     }
-
-    // ================= admins =================
 
     pub async fn remove_admin(&self, bot_id: i32, user_id: i64) -> Result<()> {
         sqlx::query("DELETE FROM admins WHERE bot_id = $1 AND user_id = $2")

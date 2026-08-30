@@ -128,4 +128,11 @@ impl ProposalStore {
     pub async fn discard_rejected(&self, id: u64) {
         self.inner.lock().await.rejected.remove(&id);
     }
+
+    pub async fn return_to_pending(&self, id: u64) -> Option<Proposal> {
+        let mut inner = self.inner.lock().await;
+        let proposal = inner.rejected.remove(&id)?;
+        inner.pending.push_front(proposal.clone());
+        Some(proposal)
+    }
 }

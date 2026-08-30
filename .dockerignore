@@ -1,6 +1,10 @@
 .git
+.github
 .gitignore
 target
 *.md
 data/
 *.tar
+.env
+.env.*
+!.env.example

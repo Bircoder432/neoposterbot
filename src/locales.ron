@@ -1,0 +1,483 @@
+// Все тексты бота. Плейсхолдеры вида {name} подставляются в src/locales.rs.
+// Многострочные строки - raw-строки r#"..."#.
+(
+    en: {
+        // ===== приветствие и панели =====
+        "welcome": r#"🤖 Welcome to the anonymous proposal bot!
+
+Just send your proposal, idea, or message here, and it will be anonymously reviewed by moderators.
+Your identity will be hidden - moderators will only see the content of your message.
+
+❓ What you can send:
+• Text proposals
+• Photos
+• Documents
+• Videos
+• Video notes
+• Audio and voice messages
+• Stickers
+
+Your proposal will be reviewed shortly!"#,
+        "owner_panel": r#"👑 Owner Panel
+
+Commands:
+/addadmin — generate invite link
+/admins — manage admins
+/banned
+/proposals
+/pardon <BAN-ID>
+/reply <ID>
+/addreplies <post_link>
+/lang <en|ru>"#,
+        "mod_panel": r#"🛠️ Moderator Panel
+
+Commands:
+/proposals
+/banned
+/pardon <BAN-ID>
+/reply <ID>
+/addreplies <post_link>
+/lang <en|ru>"#,
+        "mod_frozen_panel": r#"🛠️ Moderator Panel
+
+⚠️ You are currently ❄️ FROZEN. You cannot perform moderation actions until the bot owner unfreezes you."#,
+        "mod_frozen_action": "❌ You are frozen and cannot perform this action.",
+        "no_access": "❌ No access.",
+        "master_help": r#"👑 Admin panel:
+/stats — service statistics
+/clients — clients list (with inline management)
+/setplan <user_id> <free|pro> — set plan manually
+/banclient <user_id> — ban a client"#,
+
+        // ===== админы =====
+        "only_owner_add_admins": "❌ Only the owner can add admins.",
+        "only_owner_remove_admins": "❌ Only the owner can remove admins.",
+        "only_owner_list_admins": "❌ Only the owner can list admins.",
+        "add_admin_usage": r#"📝 Usage: /addadmin
+Generates an invite link for a new admin."#,
+        "remove_admin_usage": "📝 Usage: /removeadmin <user_ID>",
+        "admin_already_exists": "❌ User {id} is already an admin.",
+        "admin_added": "✅ User {name} added as admin!",
+        "admin_added_notification": r#"🎉 You have been added as a moderator!
+Use /start to access the moderation panel."#,
+        "admin_added_frozen_notification": r#"🎉 You have been added as a moderator, but you are currently ❄️ FROZEN.
+The bot owner needs to upgrade to Pro to unfreeze you."#,
+        "admin_added_frozen": r#"✅ User {name} added as moderator, but ❄️ FROZEN.
+You have reached the Free plan limit. Upgrade to Pro to unfreeze moderators."#,
+        "admin_invite_link": r#"🔗 Send this link to the person you want to add as admin:
+{link}
+
+The link is valid for 24 hours and can only be used once."#,
+        "admin_invite_invalid": "❌ The invitation link is invalid, expired, or already used.",
+        "admin_invite_already_admin": "❌ You are already an admin of this bot.",
+        "admin_not_found": "❌ User is not an admin.",
+        "admin_removed": "✅ Admin {id} removed.",
+        "admin_removed_notification": "⚠️ You are no longer a moderator.",
+        "no_admins": "📋 No moderators.",
+        "no_admins_to_remove": "No admins to remove. Only you (the owner) are in the list.",
+        "admins_remove_hint": "Tap a moderator to remove:",
+        "admins_manage_hint": "Tap a moderator to manage:",
+        "admins_list_header": r#"📋 Moderators:
+👑 Owner: ID {owner_id}
+"#,
+        "admin_manage_title": r#"⚙️ Manage moderator:
+{name} (ID: {id})"#,
+        "confirm_remove_admin": "⚠️ Remove admin {name} (ID: {id})?",
+        "confirm_yes": "✅ Yes, remove",
+        "confirm_no": "❌ Cancel",
+        "back_to_list_btn": "⬅️ Back to list",
+        "back_btn": "⬅️ Back",
+        "freeze_btn": "❄️ Freeze",
+        "unfreeze_btn": "🔥 Unfreeze",
+        "remove_btn": "🗑 Remove",
+        "revoke_invite_btn": "🗑 Revoke link",
+        "invite_revoked_msg": "❌ Invitation link revoked.",
+        "admin_frozen_msg": "✅ Moderator frozen.",
+        "admin_unfrozen_msg": "✅ Moderator unfrozen.",
+        "limit_reached_unfreeze": "❌ Free plan limit reached. Freeze another moderator or upgrade to Pro.",
+        "free_limit_admins": "❌ Free plan limit reached: you can only add 1 moderator. Please upgrade your plan.",
+
+        // ===== модерация предложений =====
+        "no_new_proposals": "✅ No new proposals.",
+        "proposal_items_count": "📨 Proposal ({count} item(s)):",
+        "failed_display_media": "❌ Failed to display media: {e}",
+        "proposal_action_header": r#"📨 Proposal #{id}
+⏰ {date}
+Choose action:"#,
+        "approve_btn": "✅ APPROVE",
+        "reject_btn": "❌ REJECT",
+        "published": "✅ Published!",
+        "published_no_id": "❌ Published but failed to retrieve message ID",
+        "failed_publish": "❌ Failed to publish",
+        "rejected": "✅ Rejected!",
+        "already_processing": "⏳ This proposal is already being processed.",
+        "proposal_gone": "❌ This proposal has already been processed and removed.",
+        "returned_to_queue": "✅ Proposal returned to the queue.",
+        "choose_action": "Choose action:",
+        "reason_btn": "Reason",
+        "next_btn": "Next",
+        "ban_btn": "Ban",
+        "enter_rejection_reason": "Enter rejection reason:",
+        "enter_ban_reason": "Enter ban reason:",
+        "enter_reason_callback": "✅ Enter reason",
+        "reason_sent": "✅ Reason sent.",
+        "rejected_reason": "Your message was rejected. Reason: {reason}",
+        "new_proposal_notif": r#"📨 New proposal!
+💬 {text}
+📁 Type: {media_type}
+
+/proposals"#,
+        "proposal_accepted": "✅ Your proposal has been accepted! It will be reviewed by moderators anonymously.",
+        "reply_accepted": "✅ Your reply has been accepted!",
+        "error_sending_reply": "❌ Error sending reply.",
+
+        // ===== баны =====
+        "no_active_bans": "✅ No active bans.",
+        "active_bans_header": r#"🚫 Active bans:
+"#,
+        "ban_record_entry": r#"{i}. {ban_id}
+Reason: {reason}
+Date: {date}
+"#,
+        "pardon_usage": "📝 Usage: /pardon <BAN-ID>",
+        "ban_not_found": "❌ Ban not found or already pardoned.",
+        "access_restored": "✅ Your access has been restored.",
+        "ban_deactivated": "✅ Ban {ban_id} deactivated.",
+        "user_banned": "🚫 You are banned.",
+        "user_banned_appeal": r#"🚫 You are banned.
+Reason: {reason}
+Appeal code: {ban_id}"#,
+        "user_banned_success": "✅ User banned.",
+        "error_banning_user": "❌ Error banning user.",
+
+        // ===== режим ответа и /cancel =====
+        "reply_usage": "📝 Usage: /reply <post_ID>",
+        "send_reply_to_post": r#"✍️ Send your reply to the post.
+/cancel — exit reply mode."#,
+        "invalid_reply_link": "❌ Invalid reply link.",
+        "post_not_found": "❌ Post not found.",
+        "reply_link_text": "💬 Reply",
+        "reply_quote": r#"💬 Reply:
+{quoted}"#,
+        "mode_cancelled": "✅ Cancelled. You are back to normal mode.",
+        "no_active_mode": "ℹ️ You have no active mode to cancel.",
+        "addreplies_usage": r#"📝 Usage: /addreplies <post_link>
+Example: /addreplies https://t.me/c/1234567890/5"#,
+        "addreplies_invalid_link": "❌ Invalid post link. Use format: https://t.me/c/CHANNEL_ID/MESSAGE_ID or https://t.me/CHANNEL_USERNAME/MESSAGE_ID",
+        "addreplies_already_exists": "ℹ️ This post already has a reply button.",
+        "addreplies_success": "✅ Reply button added to the post!",
+        "addreplies_failed_get": "❌ Failed to get post: {e}",
+        "addreplies_failed_edit": "❌ Failed to edit post: {e}",
+
+        // ===== типы контента =====
+        "text_proposal": r#"💬 Text proposal:
+{caption}"#,
+        "media_proposal_text": r#"💬 {media_type}
+{caption}"#,
+        "photo_text": "🖼️ Photo",
+        "document_text": "📄 Document: {name}",
+        "video_text": "🎥 Video",
+        "video_note_text": "📹 Video note",
+        "audio_text": "🎵 {title}",
+        "voice_text": "🎤 Voice message",
+        "sticker_text": "😊 Sticker",
+        "media_content_text": "📦 Media content",
+        "make_by": r#"
+make by {username}"#,
+
+        // ===== язык =====
+        "lang_usage": "📝 Usage: /lang <en|ru>",
+        "lang_invalid": "❌ Invalid language. Use 'en' or 'ru'.",
+        "lang_updated": "✅ Language updated to English.",
+
+        // ===== первоначальная настройка =====
+        "setup_checking": "🔍 Checking admin rights...",
+        "setup_not_admin": "❌ I am not an administrator in this channel. Please add me and try again.",
+        "setup_chat_not_found": "❌ Channel not found. Make sure it is public or send the correct ID (-100...).",
+        "setup_success": "✅ Setup complete! Channel '{channel_name}' linked successfully. Use /start to see the panel.",
+        "setup_enter_channel": "➕ Now, please add the bot to your Telegram channel as an administrator.",
+        "send_command_in_your_channel": "Send command in your channel:",
+
+        // ===== мастер-бот: клиенты =====
+        "clients_list_title": "👥 Clients list",
+        "clients_empty": "No clients yet.",
+        "client_not_found": "❌ Client not found.",
+        "client_details": r#"👤 <b>Client</b>
+{id_label}: <code>{tg_id}</code>
+{plan_label}: {plan}
+{status_label}: {status}
+{bots_label}: {bots}"#,
+        "client_plan_pro_until": "Pro (until {date})",
+        "client_plan_pro": "Pro",
+        "client_plan_free": "Free",
+        "client_status_banned": "🚫 Banned",
+        "client_status_active": "✅ Active",
+        "ban_client_btn": "🚫 Ban",
+        "unban_client_btn": "✅ Unban",
+        "change_plan_btn": "🔄 Change plan",
+        "make_free": "🔄 Set Free",
+        "make_pro": "🔄 Set Pro",
+        "client_bots_btn": "🤖 Bots",
+        "client_bots_title": "🤖 Client's bots:",
+        "client_banned_msg": "🚫 Client banned. Bots stopped.",
+        "client_unbanned_msg": "✅ Client unbanned. Bots restarted.",
+        "plan_changed_pro_msg": "✅ Plan changed to Pro (30 days).",
+        "plan_changed_free_msg": "✅ Plan changed to Free.",
+        "no_bots_msg": "This client has no bots.",
+        "bot_info": r#"🤖 <b>Bot info</b>
+{username_label}: @{username}
+{channel_label}: {channel}
+{status_label}: {status}"#,
+        "bot_status_active": "✅ Active",
+        "bot_status_inactive": "❌ Inactive",
+        "channel_not_configured": "Not configured",
+
+        // ===== подписи полей =====
+        "field_tg_id": "Telegram ID",
+        "field_plan": "Plan",
+        "field_status": "Status",
+        "field_bots": "Bots",
+        "field_username": "Username",
+        "field_channel": "Channel",
+    },
+
+    ru: {
+        // ===== приветствие и панели =====
+        "welcome": r#"🤖 Добро пожаловать в анонимную предложку!
+
+Просто отправьте сюда ваше предложение, идею или сообщение, и оно будет анонимно рассмотрено модераторами.
+Ваша личность будет скрыта - модераторы увидят только содержание вашего сообщения.
+
+❓ Что можно отправлять:
+• Текстовые предложения
+• Фотографии
+• Документы
+• Видео
+• Кружочки (видеосообщения)
+• Аудио и голосовые сообщения
+• Стикеры
+
+Ваше предложение будет рассмотрено в ближайшее время!"#,
+        "owner_panel": r#"👑 Панель владельца
+
+Команды:
+/addadmin — создать пригласительную ссылку
+/admins — управление администраторами
+/banned
+/proposals
+/pardon <BAN-ID>
+/reply <ID>
+/addreplies <ссылка_на_пост>
+/lang <en|ru>"#,
+        "mod_panel": r#"🛠️ Панель модератора
+
+Команды:
+/proposals
+/banned
+/pardon <BAN-ID>
+/reply <ID>
+/addreplies <ссылка_на_пост>
+/lang <en|ru>"#,
+        "mod_frozen_panel": r#"🛠️ Панель модератора
+
+⚠️ Вы сейчас ❄️ ЗАМОРОЖЕНЫ. Вы не можете выполнять модераторские действия, пока владелец бота вас не разморозит."#,
+        "mod_frozen_action": "❌ Вы заморожены и не можете выполнять это действие.",
+        "no_access": "❌ У вас нет доступа к этой функции.",
+        "master_help": r#"👑 Панель администратора:
+/stats — статистика сервиса
+/clients — список клиентов (с управлением через кнопки)
+/setplan <user_id> <free|pro> — выдать план вручную
+/banclient <user_id> — забанить клиента"#,
+
+        // ===== админы =====
+        "only_owner_add_admins": "❌ Только владелец бота может добавлять администраторов.",
+        "only_owner_remove_admins": "❌ Только владелец может удалять администраторов.",
+        "only_owner_list_admins": "❌ Только владелец может просматривать список администраторов.",
+        "add_admin_usage": r#"📝 Использование: /addadmin
+Генерирует пригласительную ссылку для нового администратора."#,
+        "remove_admin_usage": "📝 Использование: /removeadmin <ID_пользователя>",
+        "admin_already_exists": "❌ Пользователь {id} уже является администратором.",
+        "admin_added": "✅ Пользователь {name} добавлен как администратор!",
+        "admin_added_notification": r#"🎉 Вы были добавлены как модератор бота-предложки!
+Используйте команду /start для доступа к панели модерации."#,
+        "admin_added_frozen_notification": r#"🎉 Вы были добавлены как модератор, но сейчас вы ❄️ ЗАМОРОЖЕНЫ.
+Владельцу бота нужно обновиться до Pro, чтобы разморозить вас."#,
+        "admin_added_frozen": r#"✅ Пользователь {name} добавлен как модератор, но ❄️ ЗАМОРОЖЕН.
+Вы достигли лимита бесплатного тарифа. Обновите до Pro, чтобы разморозить модераторов."#,
+        "admin_invite_link": r#"🔗 Отправьте эту ссылку человеку, которого хотите добавить как администратора:
+{link}
+
+Ссылка действительна 24 часа и может быть использована только один раз."#,
+        "admin_invite_invalid": "❌ Пригласительная ссылка недействительна, истекла или уже использована.",
+        "admin_invite_already_admin": "❌ Вы уже являетесь администратором этого бота.",
+        "admin_not_found": "❌ Пользователь не является администратором.",
+        "admin_removed": "✅ Администратор {id} удалён.",
+        "admin_removed_notification": "⚠️ Вы больше не являетесь модератором бота.",
+        "no_admins": "📋 Список модераторов пуст.",
+        "no_admins_to_remove": "Нет администраторов для удаления. В списке только вы (владелец).",
+        "admins_remove_hint": "Нажмите на модератора, чтобы удалить:",
+        "admins_manage_hint": "Нажмите на модератора, чтобы управлять им:",
+        "admins_list_header": r#"📋 Список модераторов:
+👑 Владелец: ID {owner_id}
+"#,
+        "admin_manage_title": r#"⚙️ Управление модератором:
+{name} (ID: {id})"#,
+        "confirm_remove_admin": "⚠️ Удалить администратора {name} (ID: {id})?",
+        "confirm_yes": "✅ Да, удалить",
+        "confirm_no": "❌ Отмена",
+        "back_to_list_btn": "⬅️ К списку",
+        "back_btn": "⬅️ Назад",
+        "freeze_btn": "❄️ Заморозить",
+        "unfreeze_btn": "🔥 Разморозить",
+        "remove_btn": "🗑 Удалить",
+        "revoke_invite_btn": "🗑 Отозвать ссылку",
+        "invite_revoked_msg": "❌ Пригласительная ссылка отозвана.",
+        "admin_frozen_msg": "✅ Модератор заморожен.",
+        "admin_unfrozen_msg": "✅ Модератор разморожен.",
+        "limit_reached_unfreeze": "❌ Достигнут лимит бесплатного тарифа. Заморозьте другого модератора или обновитесь до Pro.",
+        "free_limit_admins": "❌ Достигнут лимит бесплатного тарифа: можно добавить только 1 модератора. Пожалуйста, улучшите тариф.",
+
+        // ===== модерация предложений =====
+        "no_new_proposals": "✅ Нет новых предложений.",
+        "proposal_items_count": "📨 Предложение ({count} элем.):",
+        "failed_display_media": "❌ Ошибка отображения медиа: {e}",
+        "proposal_action_header": r#"📨 Предложение #{id}
+⏰ {date}
+Выберите действие:"#,
+        "approve_btn": "✅ ОДОБРИТЬ",
+        "reject_btn": "❌ ОТКЛОНИТЬ",
+        "published": "✅ Опубликовано!",
+        "published_no_id": "❌ Опубликовано, но не удалось получить ID сообщения",
+        "failed_publish": "❌ Ошибка публикации",
+        "rejected": "✅ Отклонено!",
+        "already_processing": "⏳ Это предложение уже обрабатывается.",
+        "proposal_gone": "❌ Это предложение уже обработано и удалено.",
+        "returned_to_queue": "✅ Предложение возвращено в очередь.",
+        "choose_action": "Выберите действие:",
+        "reason_btn": "Причина",
+        "next_btn": "Далее",
+        "ban_btn": "Бан",
+        "enter_rejection_reason": "Введите причину отказа:",
+        "enter_ban_reason": "Введите причину блокировки:",
+        "enter_reason_callback": "✅ Введите причину",
+        "reason_sent": "✅ Причина отправлена.",
+        "rejected_reason": "Ваше сообщение отклонено по причине: {reason}",
+        "new_proposal_notif": r#"📨 Новое предложение!
+💬 {text}
+📁 Тип: {media_type}
+
+/proposals"#,
+        "proposal_accepted": "✅ Ваше предложение принято! Оно будет рассмотрено модераторами анонимно.",
+        "reply_accepted": "✅ Ваш ответ принят!",
+        "error_sending_reply": "❌ Ошибка при отправке ответа.",
+
+        // ===== баны =====
+        "no_active_bans": "✅ Список банов пуст.",
+        "active_bans_header": r#"🚫 Активные блокировки:
+"#,
+        "ban_record_entry": r#"{i}. {ban_id}
+Причина: {reason}
+Дата: {date}
+"#,
+        "pardon_usage": "📝 Использование: /pardon <BAN-ID>",
+        "ban_not_found": "❌ Бан не найден или уже снят.",
+        "access_restored": "✅ Ваш доступ восстановлен.",
+        "ban_deactivated": "✅ Бан {ban_id} деактивирован.",
+        "user_banned": "🚫 Вы заблокированы.",
+        "user_banned_appeal": r#"🚫 Вы заблокированы.
+Причина: {reason}
+Код обращения: {ban_id}"#,
+        "user_banned_success": "✅ Пользователь заблокирован.",
+        "error_banning_user": "❌ Ошибка при блокировке.",
+
+        // ===== режим ответа и /cancel =====
+        "reply_usage": "📝 Использование: /reply <ID_поста>",
+        "send_reply_to_post": r#"✍️ Отправьте ваш ответ на пост.
+/cancel — выход из режима ответа."#,
+        "invalid_reply_link": "❌ Неверная ссылка для ответа.",
+        "post_not_found": "❌ Пост не найден.",
+        "reply_link_text": "💬 Ответить",
+        "reply_quote": r#"💬 Ответ:
+{quoted}"#,
+        "mode_cancelled": "✅ Отменено. Вы вернулись в обычный режим.",
+        "no_active_mode": "ℹ️ У вас нет активного режима для отмены.",
+        "addreplies_usage": r#"📝 Использование: /addreplies <ссылка_на_пост>
+Пример: /addreplies https://t.me/c/1234567890/5"#,
+        "addreplies_invalid_link": "❌ Неверная ссылка на пост. Используйте формат: https://t.me/c/ID_КАНАЛА/ID_СООБЩЕНИЯ или https://t.me/ЮЗЕРНЕЙМ_КАНАЛА/ID_СООБЩЕНИЯ",
+        "addreplies_already_exists": "ℹ️ У этого поста уже есть кнопка ответа.",
+        "addreplies_success": "✅ Кнопка ответа добавлена к посту!",
+        "addreplies_failed_get": "❌ Не удалось получить пост: {e}",
+        "addreplies_failed_edit": "❌ Не удалось изменить пост: {e}",
+
+        // ===== типы контента =====
+        "text_proposal": r#"💬 Текст предложения:
+{caption}"#,
+        "media_proposal_text": r#"💬 {media_type}
+{caption}"#,
+        "photo_text": "🖼️ Фото",
+        "document_text": "📄 Документ: {name}",
+        "video_text": "🎥 Видео",
+        "video_note_text": "📹 Кружочек (видеосообщение)",
+        "audio_text": "🎵 {title}",
+        "voice_text": "🎤 Голосовое сообщение",
+        "sticker_text": "😊 Стикер",
+        "media_content_text": "📦 Медиа-контент",
+        "make_by": r#"
+сделано с помощью {username}"#,
+
+        // ===== язык =====
+        "lang_usage": "📝 Использование: /lang <en|ru>",
+        "lang_invalid": "❌ Неверный язык. Используйте 'en' или 'ru'.",
+        "lang_updated": "✅ Язык изменен на Русский.",
+
+        // ===== первоначальная настройка =====
+        "setup_checking": "🔍 Проверка прав администратора...",
+        "setup_not_admin": "❌ Я не являюсь администратором в этом канале. Пожалуйста, добавьте меня и попробуйте снова.",
+        "setup_chat_not_found": "❌ Канал не найден. Убедитесь, что он публичный, или отправьте корректный ID (-100...).",
+        "setup_success": "✅ Настройка завершена! Канал '{channel_name}' успешно привязан. Отправьте /start, чтобы открыть панель.",
+        "setup_enter_channel": "➕ Теперь добавьте бота в ваш Telegram-канал как администратора.",
+        "send_command_in_your_channel": "Отправьте в ваш канал команду:",
+
+        // ===== мастер-бот: клиенты =====
+        "clients_list_title": "👥 Список клиентов",
+        "clients_empty": "Клиентов пока нет.",
+        "client_not_found": "❌ Клиент не найден.",
+        "client_details": r#"👤 <b>Client</b>
+{id_label}: <code>{tg_id}</code>
+{plan_label}: {plan}
+{status_label}: {status}
+{bots_label}: {bots}"#,
+        "client_plan_pro_until": "Pro (до {date})",
+        "client_plan_pro": "Pro",
+        "client_plan_free": "Free",
+        "client_status_banned": "🚫 Забанен",
+        "client_status_active": "✅ Активен",
+        "ban_client_btn": "🚫 Бан",
+        "unban_client_btn": "✅ Разбан",
+        "change_plan_btn": "🔄 Изменить план",
+        "make_free": "🔄 Сделать Free",
+        "make_pro": "🔄 Сделать Pro",
+        "client_bots_btn": "🤖 Боты",
+        "client_bots_title": "🤖 Боты клиента:",
+        "client_banned_msg": "🚫 Клиент забанен. Боты остановлены.",
+        "client_unbanned_msg": "✅ Клиент разбанен. Боты перезапущены.",
+        "plan_changed_pro_msg": "✅ План изменён на Pro (30 дней).",
+        "plan_changed_free_msg": "✅ План изменён на Free.",
+        "no_bots_msg": "У этого клиента пока нет ботов.",
+        "bot_info": r#"🤖 <b>Bot info</b>
+{username_label}: @{username}
+{channel_label}: {channel}
+{status_label}: {status}"#,
+        "bot_status_active": "✅ Активен",
+        "bot_status_inactive": "❌ Неактивен",
+        "channel_not_configured": "Не настроен",
+
+        // ===== подписи полей =====
+        "field_tg_id": "Telegram ID",
+        "field_plan": "Тариф",
+        "field_status": "Статус",
+        "field_bots": "Ботов",
+        "field_username": "Юзернейм",
+        "field_channel": "Канал",
+    },
+)

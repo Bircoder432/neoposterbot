@@ -231,19 +231,19 @@ pub async fn publish(
     let escaped_text = escape_html(&first.message_text);
     let quoted = format!("<blockquote>{escaped_text}</blockquote>");
     let is_reply = first.parent_message_id.is_some();
-
     let base = if is_reply {
         L10n::reply_quote(lang, &quoted)
     } else {
         quoted
     };
-
     let watermark = if is_pro {
         "".to_string()
     } else {
-        L10n::make_by(lang, watermark_username)
+        format!(
+            "\n{}",
+            L10n::make_by(lang, watermark_username).trim_start_matches('\n')
+        )
     };
-
     let initial_caption = format!("{base}<i>{watermark}</i>");
 
     let channel_msg_id = if proposal.messages.len() == 1 {
@@ -255,7 +255,7 @@ pub async fn publish(
     if let Some(msg_id) = channel_msg_id {
         let reply_text = L10n::reply_link_text(lang);
         let reply_link = format!(
-            "\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a>"
+            "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a>"
         );
         let final_caption = format!("{initial_caption}{reply_link}");
         let _ = add_reply_link_to_post(bot, channel_id, msg_id, &final_caption, first).await;

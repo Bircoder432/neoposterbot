@@ -226,13 +226,32 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
         }
     }
 
-    // "Далее" после отклонения: отклонённое предложение выбрасывается из памяти.
     if let Some(id_str) = data.strip_prefix("discardnext_") {
         if let Ok(id) = id_str.parse::<u64>() {
             state.proposals.discard_rejected(id).await;
         }
         proposals::show_next_proposal(bot, chat_id, state, lang).await?;
         bot.answer_callback_query(q.id.clone()).await?;
+        return Ok(());
+    }
+
+    if let Some(id_str) = data.strip_prefix("backtopending_") {
+        if let Ok(id) = id_str.parse::<u64>() {
+            match state.proposals.return_to_pending(id).await {
+                Some(_) => {
+                    bot.answer_callback_query(q.id.clone())
+                        .text(L10n::returned_to_queue(lang))
+                        .await?;
+                    delete_callback_message(bot, chat_id, q).await?;
+                    proposals::show_next_proposal(bot, chat_id, state, lang).await?;
+                }
+                None => {
+                    bot.answer_callback_query(q.id.clone())
+                        .text(L10n::proposal_gone(lang))
+                        .await?;
+                }
+            }
+        }
         return Ok(());
     }
 
@@ -261,7 +280,6 @@ async fn handle_approve(
     state: &WorkerState,
     lang: Locale,
 ) -> R {
-    // Атомарно забираем предложение из памяти. Кто не успел - тот опоздал.
     let proposal = match state.proposals.take_active(id).await {
         Some(p) => p,
         None => {
@@ -295,7 +313,6 @@ async fn handle_approve(
     .await
     {
         Ok(Some(_channel_msg_id)) => {
-            // Предложение уже удалено из памяти - в базу ничего не пишется.
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::published(lang))
                 .await?;
@@ -309,7 +326,6 @@ async fn handle_approve(
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to publish proposal");
-            // Не потеряли - вернули в начало очереди.
             state.proposals.requeue(proposal).await;
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::failed_publish(lang))
@@ -334,11 +350,20 @@ async fn handle_reject(
                 .await?;
             delete_callback_message(bot, chat_id, q).await?;
 
-            let kb = InlineKeyboardMarkup::new(vec![vec![
-                InlineKeyboardButton::callback(L10n::reason_btn(lang), format!("reason_{id}")),
-                InlineKeyboardButton::callback(L10n::next_btn(lang), format!("discardnext_{id}")),
-                InlineKeyboardButton::callback(L10n::ban_btn(lang), format!("ban_reason_{id}")),
-            ]]);
+            let kb = InlineKeyboardMarkup::new(vec![
+                vec![
+                    InlineKeyboardButton::callback(L10n::reason_btn(lang), format!("reason_{id}")),
+                    InlineKeyboardButton::callback(
+                        L10n::next_btn(lang),
+                        format!("discardnext_{id}"),
+                    ),
+                    InlineKeyboardButton::callback(L10n::ban_btn(lang), format!("ban_reason_{id}")),
+                ],
+                vec![InlineKeyboardButton::callback(
+                    L10n::back_btn(lang),
+                    format!("backtopending_{id}"),
+                )],
+            ]);
             bot.send_message(chat_id, L10n::choose_action(lang))
                 .reply_markup(kb)
                 .await?;

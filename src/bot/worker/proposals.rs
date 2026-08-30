@@ -4,6 +4,7 @@ use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 use crate::bot::media;
 use crate::bot::worker::utils;
 use crate::bot::worker::{UserStateEntry, WorkerState};
+use crate::db::Database;
 use crate::db::models::IncomingProposal;
 use crate::hashing::hash_user_id;
 use crate::locales::{L10n, Locale};
@@ -15,7 +16,6 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
 
-    // В базе лежит только хеш - сырой айди юзера нигде не сохраняется.
     if state
         .db
         .is_banned(state.bot_id, &hash_user_id(user_id))
@@ -193,8 +193,6 @@ pub(super) async fn handle_reply_content(
     Ok(())
 }
 
-/// Отправка причины отказа. Предложение выжигается из памяти ДО отправки:
-/// отправить его одному и тому же юзеру повторно невозможно.
 pub(super) async fn handle_send_reason(
     bot: &Bot,
     msg: &Message,
@@ -229,7 +227,6 @@ pub(super) async fn handle_send_reason(
     Ok(())
 }
 
-/// Бан автора отклонённого предложения. В базу уходит только хеш айди.
 pub(super) async fn handle_send_ban_reason(
     bot: &Bot,
     msg: &Message,
@@ -251,19 +248,21 @@ pub(super) async fn handle_send_ban_reason(
         }
     };
 
+    let ban_id = Database::new_ban_id();
+    let _ = bot
+        .send_message(
+            ChatId(target_user_id),
+            L10n::user_banned_appeal(lang, reason, &ban_id),
+        )
+        .await;
+
     match state
         .db
-        .ban_user(state.bot_id, &hash_user_id(target_user_id), reason)
+        .ban_user(state.bot_id, &hash_user_id(target_user_id), reason, &ban_id)
         .await
     {
-        Ok(ban_id) => {
+        Ok(()) => {
             state.user_states.remove(&admin_id);
-            let _ = bot
-                .send_message(
-                    ChatId(target_user_id),
-                    L10n::user_banned_appeal(lang, &ban_id),
-                )
-                .await;
             bot.send_message(msg.chat.id, L10n::user_banned_success(lang))
                 .await?;
         }

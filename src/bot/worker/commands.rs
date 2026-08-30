@@ -31,8 +31,23 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
         "reply" => handle_reply_command(bot, msg, state, args).await,
         "addreplies" => handle_add_replies(bot, msg, state, args).await,
         "lang" => handle_set_language(bot, msg, state, args).await,
+        "cancel" => handle_cancel(bot, msg, state).await,
         _ => Ok(()),
     }
+}
+
+async fn handle_cancel(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
+    let user_id = msg.from.as_ref().unwrap().id.0 as i64;
+    let lang = state.db.get_language(state.bot_id).await?;
+
+    if state.user_states.remove(&user_id).is_some() {
+        bot.send_message(msg.chat.id, L10n::mode_cancelled(lang))
+            .await?;
+    } else {
+        bot.send_message(msg.chat.id, L10n::no_active_mode(lang))
+            .await?;
+    }
+    Ok(())
 }
 
 async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
@@ -198,7 +213,6 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
                 .await?;
         }
         Some(record) => {
-            // Сырой айди юзера не хранится, поэтому уведомить его невозможно.
             bot.send_message(msg.chat.id, L10n::ban_deactivated(lang, &record.ban_id))
                 .await?;
         }
