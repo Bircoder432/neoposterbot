@@ -1,0 +1,16 @@
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS user_states;
+
+DROP TABLE IF EXISTS banned_users;
+DROP TABLE IF EXISTS ban_records;
+
+CREATE TABLE IF NOT EXISTS bans (
+    id SERIAL PRIMARY KEY,
+    bot_id INT NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+    ban_id TEXT NOT NULL UNIQUE,
+    user_hash TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    UNIQUE (bot_id, user_hash)
+);

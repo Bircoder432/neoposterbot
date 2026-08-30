@@ -5,7 +5,8 @@ use super::admins;
 use super::proposals;
 use super::utils;
 use crate::bot::media;
-use crate::bot::worker::WorkerState;
+use crate::bot::worker::{UserStateEntry, WorkerState};
+use crate::hashing::hash_user_id;
 use crate::locales::{L10n, Locale};
 
 type R = anyhow::Result<()>;
@@ -46,11 +47,9 @@ async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args
     match Locale::parse(args.trim()) {
         Some(new_lang) => {
             state.db.set_language(state.bot_id, new_lang).await?;
-
             let mut cfg = state.config.write().await;
             cfg.lang = new_lang.as_str().to_string();
             drop(cfg);
-
             bot.send_message(msg.chat.id, L10n::lang_updated(new_lang))
                 .await?;
         }
@@ -74,10 +73,14 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
     if let Some(parent_id_str) = args.strip_prefix("reply_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
-                state
-                    .db
-                    .set_user_state(state.bot_id, user_id, "reply_mode", channel_msg_id as i64)
-                    .await?;
+                state.user_states.insert(
+                    user_id,
+                    UserStateEntry {
+                        state: "reply_mode".to_string(),
+                        temp_target_id: channel_msg_id as i64,
+                        proposal_id: 0,
+                    },
+                );
                 bot.send_message(chat_id, L10n::send_reply_to_post(lang))
                     .await?;
                 return Ok(());
@@ -88,7 +91,11 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
         return Ok(());
     }
 
-    if state.db.is_banned(state.bot_id, user_id).await? {
+    if state
+        .db
+        .is_banned(state.bot_id, &hash_user_id(user_id))
+        .await?
+    {
         bot.send_message(chat_id, L10n::user_banned(lang)).await?;
         return Ok(());
     }
@@ -105,7 +112,6 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
     } else {
         bot.send_message(chat_id, L10n::welcome(lang)).await?;
     }
-
     Ok(())
 }
 
@@ -133,10 +139,14 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
         }
     };
 
-    state
-        .db
-        .set_user_state(state.bot_id, user_id, "reply_mode", channel_msg_id as i64)
-        .await?;
+    state.user_states.insert(
+        user_id,
+        UserStateEntry {
+            state: "reply_mode".to_string(),
+            temp_target_id: channel_msg_id as i64,
+            proposal_id: 0,
+        },
+    );
     bot.send_message(msg.chat.id, L10n::send_reply_to_post(lang))
         .await?;
     Ok(())
@@ -156,6 +166,7 @@ async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
         bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
         return Ok(());
     }
+
     proposals::show_next_proposal(bot, msg.chat.id, state, lang).await
 }
 
@@ -181,18 +192,14 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
         return Ok(());
     }
 
-    match state.db.get_ban_record(state.bot_id, ban_id).await? {
+    match state.db.pardon_by_ban_id(state.bot_id, ban_id).await? {
         None => {
             bot.send_message(msg.chat.id, L10n::ban_not_found(lang))
                 .await?;
         }
         Some(record) => {
-            state.db.pardon_user(state.bot_id, record.user_id).await?;
-            state.db.deactivate_ban(state.bot_id, ban_id).await?;
-            let _ = bot
-                .send_message(ChatId(record.user_id), L10n::access_restored(lang))
-                .await;
-            bot.send_message(msg.chat.id, L10n::ban_deactivated(lang, ban_id))
+            // Сырой айди юзера не хранится, поэтому уведомить его невозможно.
+            bot.send_message(msg.chat.id, L10n::ban_deactivated(lang, &record.ban_id))
                 .await?;
         }
     }
@@ -241,7 +248,6 @@ fn parse_post_link(link: &str) -> Option<i32> {
     let path = &lower[pos + 5..];
     let path = path.split('?').next().unwrap_or(path);
     let parts: Vec<&str> = path.split('/').collect();
-
     if parts.len() >= 3 && parts[0] == "c" {
         parts[2].parse::<i32>().ok()
     } else if parts.len() >= 2 {
@@ -312,7 +318,6 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
         .map(|s| s.to_string())
         .or_else(|| forwarded.caption().map(|s| s.to_string()))
         .unwrap_or_default();
-
     let _ = bot.delete_message(ChatId(user_id), forwarded.id).await;
 
     if current_text.contains("start=reply_") {
@@ -323,7 +328,7 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
 
     let reply_text = L10n::reply_link_text(lang);
     let reply_link = format!(
-        "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
+        "\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
     );
     let new_text = format!("{current_text}{reply_link}");
 
@@ -342,6 +347,5 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
             .await?;
         }
     }
-
     Ok(())
 }

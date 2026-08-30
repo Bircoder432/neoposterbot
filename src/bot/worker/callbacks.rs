@@ -6,8 +6,7 @@ use super::admins;
 use super::proposals;
 use super::utils;
 use crate::bot::media;
-use crate::bot::worker::WorkerState;
-use crate::db::models::Proposal;
+use crate::bot::worker::{UserStateEntry, WorkerState};
 use crate::locales::{L10n, Locale};
 
 type R = Result<()>;
@@ -25,7 +24,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                 Locale::En
             };
             state.db.set_language(bot_id, lang).await?;
-
             let mut cfg = state.config.write().await;
             cfg.lang = lang.as_str().to_string();
             drop(cfg);
@@ -37,7 +35,7 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             bot.send_message(
                 q.from.id,
                 format!(
-                    "{}\n\n{}\n<code>/connect {}</code>",
+                    "{}\n{}\n<code>/connect {}</code>",
                     L10n::send_command_in_your_channel(lang),
                     L10n::setup_enter_channel(lang),
                     code
@@ -203,7 +201,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                 let _ = bot
                     .send_message(ChatId(target_id), L10n::admin_removed_notification(lang))
                     .await;
-
                 let (text, markup) =
                     admins::build_admins_inline(&state.db, state.bot_id, state.client_tg_id, lang)
                         .await;
@@ -229,68 +226,54 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
         }
     }
 
-    if data == "next" {
+    // "Далее" после отклонения: отклонённое предложение выбрасывается из памяти.
+    if let Some(id_str) = data.strip_prefix("discardnext_") {
+        if let Ok(id) = id_str.parse::<u64>() {
+            state.proposals.discard_rejected(id).await;
+        }
         proposals::show_next_proposal(bot, chat_id, state, lang).await?;
-        bot.answer_callback_query(q.id.clone())
-            .text(L10n::next_btn(lang))
-            .await?;
+        bot.answer_callback_query(q.id.clone()).await?;
         return Ok(());
     }
 
     if let Some(id_str) = data.strip_prefix("approve_") {
-        let id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
+        let id: u64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
         handle_approve(bot, chat_id, id, q, state, lang).await?;
     } else if let Some(id_str) = data.strip_prefix("reject_") {
-        let id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
+        let id: u64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
         handle_reject(bot, chat_id, id, q, state, lang).await?;
     } else if let Some(id_str) = data.strip_prefix("reason_") {
-        let msg_id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
-        handle_reason(bot, chat_id, msg_id, q, state, lang).await?;
+        let id: u64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
+        handle_reason(bot, chat_id, id, q, state, lang).await?;
     } else if let Some(id_str) = data.strip_prefix("ban_reason_") {
-        let msg_id: i64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
-        handle_ban_reason(bot, chat_id, msg_id, q, state, lang).await?;
+        let id: u64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
+        handle_ban_reason(bot, chat_id, id, q, state, lang).await?;
     }
+
     Ok(())
 }
 
 async fn handle_approve(
     bot: &Bot,
     chat_id: ChatId,
-    msg_id: i64,
+    id: u64,
     q: &CallbackQuery,
     state: &WorkerState,
     lang: Locale,
 ) -> R {
-    let msg = state
-        .db
-        .get_message_by_id(state.bot_id, msg_id)
-        .await?
-        .ok_or_else(|| anyhow!("Message not found"))?;
-    let group_id = msg.proposal_group_id.clone();
-
-    let claimed = state
-        .db
-        .claim_proposal_for_publishing(state.bot_id, &group_id)
-        .await?;
-    if !claimed {
-        bot.answer_callback_query(q.id.clone())
-            .text(L10n::already_processing(lang))
-            .await?;
-        delete_callback_message(bot, chat_id, q).await?;
-        return Ok(());
-    }
-
-    let messages = state
-        .db
-        .get_proposal_by_group_id(state.bot_id, &group_id)
-        .await?;
-    let proposal = Proposal {
-        group_id: group_id.clone(),
-        messages,
+    // Атомарно забираем предложение из памяти. Кто не успел - тот опоздал.
+    let proposal = match state.proposals.take_active(id).await {
+        Some(p) => p,
+        None => {
+            bot.answer_callback_query(q.id.clone())
+                .text(L10n::already_processing(lang))
+                .await?;
+            delete_callback_message(bot, chat_id, q).await?;
+            return Ok(());
+        }
     };
 
-    let reply_to = proposal.first().parent_message_id.map(|id| id as i32);
-
+    let reply_to = proposal.first().parent_message_id.map(|v| v as i32);
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
     let bot_username = cfg.bot_username.clone();
@@ -311,11 +294,8 @@ async fn handle_approve(
     )
     .await
     {
-        Ok(Some(channel_msg_id)) => {
-            state
-                .db
-                .finalize_published(state.bot_id, &group_id, channel_msg_id)
-                .await?;
+        Ok(Some(_channel_msg_id)) => {
+            // Предложение уже удалено из памяти - в базу ничего не пишется.
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::published(lang))
                 .await?;
@@ -323,14 +303,14 @@ async fn handle_approve(
             proposals::show_next_proposal(bot, chat_id, state, lang).await?;
         }
         Ok(None) => {
-            state.db.revert_to_pending(state.bot_id, &group_id).await?;
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::published_no_id(lang))
                 .await?;
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to publish proposal");
-            state.db.revert_to_pending(state.bot_id, &group_id).await?;
+            // Не потеряли - вернули в начало очереди.
+            state.proposals.requeue(proposal).await;
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::failed_publish(lang))
                 .await?;
@@ -342,65 +322,66 @@ async fn handle_approve(
 async fn handle_reject(
     bot: &Bot,
     chat_id: ChatId,
-    msg_id: i64,
+    id: u64,
     q: &CallbackQuery,
     state: &WorkerState,
     lang: Locale,
 ) -> R {
-    let msg = state
-        .db
-        .get_message_by_id(state.bot_id, msg_id)
-        .await?
-        .ok_or_else(|| anyhow!("Message not found"))?;
-    let group_id = msg.proposal_group_id.clone();
+    match state.proposals.reject(id).await {
+        Some(_) => {
+            bot.answer_callback_query(q.id.clone())
+                .text(L10n::rejected(lang))
+                .await?;
+            delete_callback_message(bot, chat_id, q).await?;
 
-    state
-        .db
-        .update_proposal_status(state.bot_id, &group_id, "rejected")
-        .await?;
-
-    bot.answer_callback_query(q.id.clone())
-        .text(L10n::rejected(lang))
-        .await?;
-    delete_callback_message(bot, chat_id, q).await?;
-
-    let kb = InlineKeyboardMarkup::new(vec![vec![
-        InlineKeyboardButton::callback(L10n::reason_btn(lang), format!("reason_{msg_id}")),
-        InlineKeyboardButton::callback(L10n::next_btn(lang), "next"),
-        InlineKeyboardButton::callback(L10n::ban_btn(lang), format!("ban_reason_{msg_id}")),
-    ]]);
-
-    bot.send_message(chat_id, L10n::choose_action(lang))
-        .reply_markup(kb)
-        .await?;
+            let kb = InlineKeyboardMarkup::new(vec![vec![
+                InlineKeyboardButton::callback(L10n::reason_btn(lang), format!("reason_{id}")),
+                InlineKeyboardButton::callback(L10n::next_btn(lang), format!("discardnext_{id}")),
+                InlineKeyboardButton::callback(L10n::ban_btn(lang), format!("ban_reason_{id}")),
+            ]]);
+            bot.send_message(chat_id, L10n::choose_action(lang))
+                .reply_markup(kb)
+                .await?;
+        }
+        None => {
+            bot.answer_callback_query(q.id.clone())
+                .text(L10n::already_processing(lang))
+                .await?;
+            delete_callback_message(bot, chat_id, q).await?;
+        }
+    }
     Ok(())
 }
 
 async fn handle_reason(
     bot: &Bot,
     chat_id: ChatId,
-    msg_id: i64,
+    id: u64,
     q: &CallbackQuery,
     state: &WorkerState,
     lang: Locale,
 ) -> R {
     let admin_id = q.from.id.0 as i64;
-
-    let msg = state.db.get_message_by_id(state.bot_id, msg_id).await?;
-    let sender_id = match msg {
-        Some(m) => m.sender_id,
+    let sender_id = match state.proposals.rejected_sender(id).await {
+        Some(s) => s,
         None => {
-            bot.answer_callback_query(q.id.clone()).text("❌").await?;
+            bot.answer_callback_query(q.id.clone())
+                .text(L10n::proposal_gone(lang))
+                .await?;
             return Ok(());
         }
     };
 
     bot.send_message(chat_id, L10n::enter_rejection_reason(lang))
         .await?;
-    state
-        .db
-        .set_user_state(state.bot_id, admin_id, "reason", sender_id)
-        .await?;
+    state.user_states.insert(
+        admin_id,
+        UserStateEntry {
+            state: "reason".to_string(),
+            temp_target_id: sender_id,
+            proposal_id: id,
+        },
+    );
     bot.answer_callback_query(q.id.clone())
         .text(L10n::enter_reason_callback(lang))
         .await?;
@@ -410,28 +391,32 @@ async fn handle_reason(
 async fn handle_ban_reason(
     bot: &Bot,
     chat_id: ChatId,
-    msg_id: i64,
+    id: u64,
     q: &CallbackQuery,
     state: &WorkerState,
     lang: Locale,
 ) -> R {
     let admin_id = q.from.id.0 as i64;
-
-    let msg = state.db.get_message_by_id(state.bot_id, msg_id).await?;
-    let sender_id = match msg {
-        Some(m) => m.sender_id,
+    let sender_id = match state.proposals.rejected_sender(id).await {
+        Some(s) => s,
         None => {
-            bot.answer_callback_query(q.id.clone()).text("❌").await?;
+            bot.answer_callback_query(q.id.clone())
+                .text(L10n::proposal_gone(lang))
+                .await?;
             return Ok(());
         }
     };
 
     bot.send_message(chat_id, L10n::enter_ban_reason(lang))
         .await?;
-    state
-        .db
-        .set_user_state(state.bot_id, admin_id, "ban_reason", sender_id)
-        .await?;
+    state.user_states.insert(
+        admin_id,
+        UserStateEntry {
+            state: "ban_reason".to_string(),
+            temp_target_id: sender_id,
+            proposal_id: id,
+        },
+    );
     bot.answer_callback_query(q.id.clone())
         .text(L10n::enter_reason_callback(lang))
         .await?;

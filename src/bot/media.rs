@@ -5,7 +5,7 @@ use teloxide::types::{
     LinkPreviewOptions, Message as TgMessage, MessageId, ParseMode, ReplyParameters,
 };
 
-use crate::db::models::{Message, Proposal};
+use crate::db::models::{Proposal, ProposalMessage};
 use crate::locales::{L10n, Locale};
 
 pub fn extract_media_info(msg: &TgMessage, _lang: Locale) -> (String, String) {
@@ -104,7 +104,7 @@ pub async fn send_for_moderation(
 async fn send_single_for_moderation(
     bot: &Bot,
     chat_id: ChatId,
-    msg: &Message,
+    msg: &ProposalMessage,
     lang: Locale,
 ) -> Result<()> {
     let media_type = msg.media_type.as_str();
@@ -140,7 +140,7 @@ async fn send_single_for_moderation(
 async fn send_group_for_moderation(
     bot: &Bot,
     chat_id: ChatId,
-    messages: &[Message],
+    messages: &[ProposalMessage],
     lang: Locale,
 ) -> Result<()> {
     let all_media = messages
@@ -162,13 +162,14 @@ async fn send_group_for_moderation(
     Ok(())
 }
 
-fn build_input_media(msg: &Message, is_first: bool, with_html: bool) -> InputMedia {
+fn build_input_media(msg: &ProposalMessage, is_first: bool, with_html: bool) -> InputMedia {
     let file = input_file(&msg.media_file_id);
     let caption = if is_first && !msg.message_text.is_empty() {
         Some(msg.message_text.clone())
     } else {
         None
     };
+
     let mut builder = match msg.media_type.as_str() {
         "video" => InputMediaBuilder::Video(InputMediaVideo::new(file)),
         "audio" => InputMediaBuilder::Audio(InputMediaAudio::new(file)),
@@ -198,6 +199,7 @@ impl InputMediaBuilder {
             Self::Audio(b) => Self::Audio(b.caption(caption)),
         }
     }
+
     fn parse_mode(self, mode: ParseMode) -> Self {
         match self {
             Self::Photo(b) => Self::Photo(b.parse_mode(mode)),
@@ -205,6 +207,7 @@ impl InputMediaBuilder {
             Self::Audio(b) => Self::Audio(b.parse_mode(mode)),
         }
     }
+
     fn build(self) -> InputMedia {
         match self {
             Self::Photo(b) => InputMedia::Photo(b),
@@ -226,10 +229,9 @@ pub async fn publish(
 ) -> Result<Option<i32>> {
     let first = proposal.first();
     let escaped_text = escape_html(&first.message_text);
-
     let quoted = format!("<blockquote>{escaped_text}</blockquote>");
-
     let is_reply = first.parent_message_id.is_some();
+
     let base = if is_reply {
         L10n::reply_quote(lang, &quoted)
     } else {
@@ -237,9 +239,9 @@ pub async fn publish(
     };
 
     let watermark = if is_pro {
-        ""
+        "".to_string()
     } else {
-        &L10n::make_by(lang, watermark_username)
+        L10n::make_by(lang, watermark_username)
     };
 
     let initial_caption = format!("{base}<i>{watermark}</i>");
@@ -253,10 +255,9 @@ pub async fn publish(
     if let Some(msg_id) = channel_msg_id {
         let reply_text = L10n::reply_link_text(lang);
         let reply_link = format!(
-            "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a>"
+            "\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a>"
         );
         let final_caption = format!("{initial_caption}{reply_link}");
-
         let _ = add_reply_link_to_post(bot, channel_id, msg_id, &final_caption, first).await;
     }
 
@@ -268,7 +269,7 @@ async fn add_reply_link_to_post(
     channel_id: i64,
     msg_id: i32,
     final_caption: &str,
-    msg: &Message,
+    msg: &ProposalMessage,
 ) -> Result<()> {
     let chat = ChatId(channel_id);
     let media_type = msg.media_type.as_str();
@@ -319,7 +320,7 @@ pub async fn add_reply_to_channel_post(
 async fn publish_single(
     bot: &Bot,
     channel_id: i64,
-    msg: &Message,
+    msg: &ProposalMessage,
     caption: &str,
     reply_to: Option<i32>,
 ) -> Result<Option<i32>> {
@@ -415,13 +416,14 @@ async fn publish_single(
             }
         }
     };
+
     Ok(Some(sent.id.0))
 }
 
 async fn publish_group(
     bot: &Bot,
     channel_id: i64,
-    messages: &[Message],
+    messages: &[ProposalMessage],
     caption: &str,
 ) -> Result<Option<i32>> {
     let media: Vec<InputMedia> = messages

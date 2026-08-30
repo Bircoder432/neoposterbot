@@ -27,10 +27,20 @@ impl L10n {
     pub fn welcome(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "🤖 Welcome to the anonymous proposal bot!\n\nJust send your proposal, idea, or message here, and it will be anonymously reviewed by moderators.\n\nYour identity will be hidden - moderators will only see the content of your message.\n\n❓ What you can send:\n• Text proposals\n• Photos\n• Documents\n• Videos\n• Video notes\n• Audio and voice messages\n• Stickers\n\nYour proposal will be reviewed shortly!"
+                "🤖 Welcome to the anonymous proposal bot!\n\n\
+                 Just send your proposal, idea, or message here, and it will be anonymously reviewed by moderators.\n\
+                 Your identity will be hidden - moderators will only see the content of your message.\n\n\
+                 ❓ What you can send:\n\
+                 • Text proposals\n• Photos\n• Documents\n• Videos\n• Video notes\n• Audio and voice messages\n• Stickers\n\n\
+                 Your proposal will be reviewed shortly!"
             }
             Locale::Ru => {
-                "🤖 Добро пожаловать в анонимную предложку!\n\nПросто отправьте сюда ваше предложение, идею или сообщение, и оно будет анонимно рассмотрено модераторами.\n\nВаша личность будет скрыта - модераторы увидят только содержание вашего сообщения.\n\n❓ Что можно отправлять:\n• Текстовые предложения\n• Фотографии\n• Документы\n• Видео\n• Кружочки (видеосообщения)\n• Аудио и голосовые сообщения\n• Стикеры\n\nВаше предложение будет рассмотрено в ближайшее время!"
+                "🤖 Добро пожаловать в анонимную предложку!\n\n\
+                 Просто отправьте сюда ваше предложение, идею или сообщение, и оно будет анонимно рассмотрено модераторами.\n\
+                 Ваша личность будет скрыта - модераторы увидят только содержание вашего сообщения.\n\n\
+                 ❓ Что можно отправлять:\n\
+                 • Текстовые предложения\n• Фотографии\n• Документы\n• Видео\n• Кружочки (видеосообщения)\n• Аудио и голосовые сообщения\n• Стикеры\n\n\
+                 Ваше предложение будет рассмотрено в ближайшее время!"
             }
         }
     }
@@ -44,9 +54,9 @@ impl L10n {
 
     pub fn add_admin_usage(l: Locale) -> &'static str {
         match l {
-            Locale::En => "📝 Usage: /addadmin\n\nGenerates an invite link for a new admin.",
+            Locale::En => "📝 Usage: /addadmin\nGenerates an invite link for a new admin.",
             Locale::Ru => {
-                "📝 Использование: /addadmin\n\nГенерирует пригласительную ссылку для нового администратора."
+                "📝 Использование: /addadmin\nГенерирует пригласительную ссылку для нового администратора."
             }
         }
     }
@@ -68,10 +78,10 @@ impl L10n {
     pub fn admin_added_notification(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "🎉 You have been added as a moderator!\n\nUse /start to access the moderation panel."
+                "🎉 You have been added as a moderator!\nUse /start to access the moderation panel."
             }
             Locale::Ru => {
-                "🎉 Вы были добавлены как модератор бота-предложки!\n\nИспользуйте команду /start для доступа к панели модерации."
+                "🎉 Вы были добавлены как модератор бота-предложки!\nИспользуйте команду /start для доступа к панели модерации."
             }
         }
     }
@@ -79,10 +89,10 @@ impl L10n {
     pub fn admin_added_frozen_notification(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "🎉 You have been added as a moderator, but you are currently ❄️ FROZEN.\n\nThe bot owner needs to upgrade to Pro to unfreeze you."
+                "🎉 You have been added as a moderator, but you are currently ❄️ FROZEN.\nThe bot owner needs to upgrade to Pro to unfreeze you."
             }
             Locale::Ru => {
-                "🎉 Вы были добавлены как модератор, но сейчас вы ❄️ ЗАМОРОЖЕНЫ.\n\nВладельцу бота нужно обновиться до Pro, чтобы разморозить вас."
+                "🎉 Вы были добавлены как модератор, но сейчас вы ❄️ ЗАМОРОЖЕНЫ.\nВладельцу бота нужно обновиться до Pro, чтобы разморозить вас."
             }
         }
     }
@@ -90,10 +100,10 @@ impl L10n {
     pub fn admin_invite_link(l: Locale, link: &str) -> String {
         match l {
             Locale::En => format!(
-                "🔗 Send this link to the person you want to add as admin:\n\n{link}\n\nThe link is valid for 24 hours and can only be used once."
+                "🔗 Send this link to the person you want to add as admin:\n{link}\n\nThe link is valid for 24 hours and can only be used once."
             ),
             Locale::Ru => format!(
-                "🔗 Отправьте эту ссылку человеку, которого хотите добавить как администратора:\n\n{link}\n\nСсылка действительна 24 часа и может быть использована только один раз."
+                "🔗 Отправьте эту ссылку человеку, которого хотите добавить как администратора:\n{link}\n\nСсылка действительна 24 часа и может быть использована только один раз."
             ),
         }
     }
@@ -179,8 +189,8 @@ impl L10n {
 
     pub fn admins_list_header(l: Locale, owner_id: i64) -> String {
         match l {
-            Locale::En => format!("📋 Moderators:\n\n👑 Owner: ID {owner_id}\n\n"),
-            Locale::Ru => format!("📋 Список модераторов:\n\n👑 Владелец: ID {owner_id}\n\n"),
+            Locale::En => format!("📋 Moderators:\n👑 Owner: ID {owner_id}\n"),
+            Locale::Ru => format!("📋 Список модераторов:\n👑 Владелец: ID {owner_id}\n"),
         }
     }
 
@@ -235,15 +245,15 @@ impl L10n {
 
     pub fn active_bans_header(l: Locale) -> &'static str {
         match l {
-            Locale::En => "🚫 Active bans:\n\n",
-            Locale::Ru => "🚫 Активные блокировки:\n\n",
+            Locale::En => "🚫 Active bans:\n",
+            Locale::Ru => "🚫 Активные блокировки:\n",
         }
     }
 
     pub fn ban_record_entry(l: Locale, i: usize, ban_id: &str, reason: &str, date: &str) -> String {
         match l {
-            Locale::En => format!("{i}. {ban_id}\n   Reason: {reason}\n   Date: {date}\n"),
-            Locale::Ru => format!("{i}. {ban_id}\n   Причина: {reason}\n   Дата: {date}\n"),
+            Locale::En => format!("{i}. {ban_id}\nReason: {reason}\nDate: {date}\n"),
+            Locale::Ru => format!("{i}. {ban_id}\nПричина: {reason}\nДата: {date}\n"),
         }
     }
 
@@ -284,7 +294,7 @@ impl L10n {
 
     pub fn proposal_items_count(l: Locale, count: usize) -> String {
         match l {
-            Locale::En => format!("📨 Proposal ({count} item(s)):",),
+            Locale::En => format!("📨 Proposal ({count} item(s)):"),
             Locale::Ru => format!("📨 Предложение ({count} элем.):"),
         }
     }
@@ -296,10 +306,10 @@ impl L10n {
         }
     }
 
-    pub fn proposal_action_header(l: Locale, id: i64, date: &str) -> String {
+    pub fn proposal_action_header(l: Locale, id: u64, date: &str) -> String {
         match l {
-            Locale::En => format!("📨 Proposal #{id}\n⏰ {date}\n\nChoose action:"),
-            Locale::Ru => format!("📨 Предложение #{id}\n⏰ {date}\n\nВыберите действие:"),
+            Locale::En => format!("📨 Proposal #{id}\n⏰ {date}\nChoose action:"),
+            Locale::Ru => format!("📨 Предложение #{id}\n⏰ {date}\nВыберите действие:"),
         }
     }
 
@@ -514,10 +524,10 @@ impl L10n {
     pub fn new_proposal_notif(l: Locale, text: &str, media_type: &str) -> String {
         match l {
             Locale::En => {
-                format!("📨 New proposal!\n\n💬 {text}\n📁 Type: {media_type}\n\n/proposals")
+                format!("📨 New proposal!\n💬 {text}\n📁 Type: {media_type}\n\n/proposals")
             }
             Locale::Ru => {
-                format!("📨 Новое предложение!\n\n💬 {text}\n📁 Тип: {media_type}\n\n/proposals")
+                format!("📨 Новое предложение!\n💬 {text}\n📁 Тип: {media_type}\n\n/proposals")
             }
         }
     }
@@ -594,8 +604,8 @@ impl L10n {
 
     pub fn reply_quote(l: Locale, quoted: &str) -> String {
         match l {
-            Locale::En => format!("💬 Reply:\n\n{quoted}"),
-            Locale::Ru => format!("💬 Ответ:\n\n{quoted}"),
+            Locale::En => format!("💬 Reply:\n{quoted}"),
+            Locale::Ru => format!("💬 Ответ:\n{quoted}"),
         }
     }
 
@@ -699,10 +709,10 @@ impl L10n {
     pub fn admin_added_frozen(l: Locale, name: &str) -> String {
         match l {
             Locale::En => format!(
-                "✅ User {name} added as moderator, but ❄️ FROZEN.\n\nYou have reached the Free plan limit. Upgrade to Pro to unfreeze moderators."
+                "✅ User {name} added as moderator, but ❄️ FROZEN.\nYou have reached the Free plan limit. Upgrade to Pro to unfreeze moderators."
             ),
             Locale::Ru => format!(
-                "✅ Пользователь {name} добавлен как модератор, но ❄️ ЗАМОРОЖЕН.\n\nВы достигли лимита бесплатного тарифа. Обновите до Pro, чтобы разморозить модераторов."
+                "✅ Пользователь {name} добавлен как модератор, но ❄️ ЗАМОРОЖЕН.\nВы достигли лимита бесплатного тарифа. Обновите до Pro, чтобы разморозить модераторов."
             ),
         }
     }
@@ -780,7 +790,7 @@ impl L10n {
             Locale::Ru => "Статус",
         };
         format!(
-            "👤 <b>Client</b>\n\n{id_label}: <code>{tg_id}</code>\n{plan_label}: {plan_str}\n{status_label}: {status_str}\n{bots_label}: {bots_count}"
+            "👤 <b>Client</b>\n{id_label}: <code>{tg_id}</code>\n{plan_label}: {plan_str}\n{status_label}: {status_str}\n{bots_label}: {bots_count}"
         )
     }
 
@@ -879,7 +889,7 @@ impl L10n {
             Locale::Ru => "Статус",
         };
         format!(
-            "🤖 <b>Bot info</b>\n\n{username_label}: @{username}\n{channel_label}: {channel_display}\n{status_label}: {active_str}"
+            "🤖 <b>Bot info</b>\n{username_label}: @{username}\n{channel_label}: {channel_display}\n{status_label}: {active_str}"
         )
     }
 
@@ -893,10 +903,10 @@ impl L10n {
     pub fn master_help(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "👑 Admin panel:\n\n/stats — service statistics\n/clients — clients list (with inline management)\n/setplan <user_id> <free|pro> — set plan manually\n/banclient <user_id> — ban a client"
+                "👑 Admin panel:\n/stats — service statistics\n/clients — clients list (with inline management)\n/setplan <user_id> <free|pro> — set plan manually\n/banclient <user_id> — ban a client"
             }
             Locale::Ru => {
-                "👑 Панель администратора:\n\n/stats — статистика сервиса\n/clients — список клиентов (с управлением через кнопки)\n/setplan <user_id> <free|pro> — выдать план вручную\n/banclient <user_id> — забанить клиента"
+                "👑 Панель администратора:\n/stats — статистика сервиса\n/clients — список клиентов (с управлением через кнопки)\n/setplan <user_id> <free|pro> — выдать план вручную\n/banclient <user_id> — забанить клиента"
             }
         }
     }
@@ -938,8 +948,8 @@ impl L10n {
 
     pub fn admin_manage_title(l: Locale, name: &str, id: i64) -> String {
         match l {
-            Locale::En => format!("⚙️ Manage moderator:\n\n{name} (ID: {id})"),
-            Locale::Ru => format!("⚙️ Управление модератором:\n\n{name} (ID: {id})"),
+            Locale::En => format!("⚙️ Manage moderator:\n{name} (ID: {id})"),
+            Locale::Ru => format!("⚙️ Управление модератором:\n{name} (ID: {id})"),
         }
     }
 
@@ -1012,6 +1022,14 @@ impl L10n {
         }
     }
 
+    /// Предложение уже обработано и выжжено из памяти - повторно ничего отправить нельзя.
+    pub fn proposal_gone(l: Locale) -> &'static str {
+        match l {
+            Locale::En => "❌ This proposal has already been processed and removed.",
+            Locale::Ru => "❌ Это предложение уже обработано и удалено.",
+        }
+    }
+
     pub fn send_command_in_your_channel(l: Locale) -> &'static str {
         match l {
             Locale::En => "Send command in your channel:",
@@ -1022,10 +1040,10 @@ impl L10n {
     pub fn addreplies_usage(l: Locale) -> &'static str {
         match l {
             Locale::En => {
-                "📝 Usage: /addreplies <post_link>\n\nExample: /addreplies https://t.me/c/1234567890/5"
+                "📝 Usage: /addreplies <post_link>\nExample: /addreplies https://t.me/c/1234567890/5"
             }
             Locale::Ru => {
-                "📝 Использование: /addreplies <ссылка_на_пост>\n\nПример: /addreplies https://t.me/c/1234567890/5"
+                "📝 Использование: /addreplies <ссылка_на_пост>\nПример: /addreplies https://t.me/c/1234567890/5"
             }
         }
     }

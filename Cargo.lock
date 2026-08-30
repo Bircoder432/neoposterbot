@@ -1251,12 +1251,13 @@ checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
 name = "posterbot_constructor"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
  "dashmap",
  "dotenvy",
+ "sha2 0.10.9",
  "sqlx",
  "teloxide",
  "tempfile",

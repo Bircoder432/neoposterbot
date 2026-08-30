@@ -1,11 +1,11 @@
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
-use tracing;
 
 use crate::bot::media;
-use crate::bot::worker::WorkerState;
 use crate::bot::worker::utils;
-use crate::db::models::{NewMessage, Proposal};
+use crate::bot::worker::{UserStateEntry, WorkerState};
+use crate::db::models::IncomingProposal;
+use crate::hashing::hash_user_id;
 use crate::locales::{L10n, Locale};
 
 type R = anyhow::Result<()>;
@@ -15,13 +15,20 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
 
-    if state.db.is_banned(state.bot_id, user_id).await? {
+    // В базе лежит только хеш - сырой айди юзера нигде не сохраняется.
+    if state
+        .db
+        .is_banned(state.bot_id, &hash_user_id(user_id))
+        .await?
+    {
         bot.send_message(chat_id, L10n::user_banned(lang)).await?;
         return Ok(());
     }
+
     if msg.chat.is_group() || msg.chat.is_supergroup() {
         return Ok(());
     }
+
     if !utils::has_content(msg) {
         return Ok(());
     }
@@ -31,11 +38,9 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
 
     let mut parent_message_id = None;
-
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
     let channel_username = cfg.channel_username.clone();
-
     drop(cfg);
 
     if !message_text.is_empty() {
@@ -54,20 +59,24 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
         .clone()
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
 
-    let new_msg = NewMessage {
-        bot_id: state.bot_id,
-        chat_id: chat_id.0,
-        telegram_message_id: msg.id.0 as i32,
-        sender_id: user_id,
-        message_text,
-        media_type,
-        media_file_id,
-        media_group_id,
-        proposal_group_id,
-        parent_message_id,
-    };
+    let notif_text = message_text.clone();
+    let notif_type = media_type.clone();
 
-    let inserted = state.db.save_message(&new_msg).await?;
+    let inserted = state
+        .proposals
+        .push(IncomingProposal {
+            chat_id: chat_id.0,
+            telegram_message_id: msg.id.0 as i32,
+            sender_id: user_id,
+            message_text,
+            media_type,
+            media_file_id,
+            media_group_id,
+            proposal_group_id,
+            parent_message_id,
+        })
+        .await;
+
     if inserted {
         if parent_message_id.is_some() {
             bot.send_message(chat_id, L10n::reply_accepted(lang))
@@ -76,7 +85,7 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
             bot.send_message(chat_id, L10n::proposal_accepted(lang))
                 .await?;
         }
-        notify_admins(bot, state, &new_msg, lang).await?;
+        notify_admins(bot, state, &notif_text, &notif_type, lang).await?;
     }
     Ok(())
 }
@@ -87,21 +96,18 @@ fn parse_and_strip_tme_link(
     channel_username: Option<&str>,
 ) -> Option<i32> {
     let lower_text = text.to_ascii_lowercase();
-
     if let Some(pos) = lower_text.find("t.me/") {
-        let prefix_start = if pos >= 8 && &lower_text[pos - 8..pos] == "https://" {
+        let prefix_start = if pos >= 8 && lower_text.get(pos - 8..pos) == Some("https://") {
             pos - 8
-        } else if pos >= 7 && &lower_text[pos - 7..pos] == "http://" {
+        } else if pos >= 7 && lower_text.get(pos - 7..pos) == Some("http://") {
             pos - 7
         } else {
             pos
         };
-
         let url_end = lower_text[pos..]
             .find(|c: char| c.is_whitespace())
             .map(|e| pos + e)
             .unwrap_or(lower_text.len());
-
         let path = &lower_text[pos + 5..url_end];
         let path = path.split('?').next().unwrap_or(path);
         let parts: Vec<&str> = path.split('/').collect();
@@ -115,7 +121,6 @@ fn parse_and_strip_tme_link(
             let expected_internal_id = channel_id_str
                 .strip_prefix("-100")
                 .unwrap_or(&channel_id_str);
-
             if expected_internal_id == internal_id_str {
                 if let Ok(id) = parts[2].parse::<i32>() {
                     msg_id = id;
@@ -156,80 +161,103 @@ pub(super) async fn handle_reply_content(
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let message_text = media::extract_message_text(msg, lang);
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
-
     let proposal_group_id = media_group_id
         .clone()
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
 
-    let new_msg = NewMessage {
-        bot_id: state.bot_id,
-        chat_id: chat_id.0,
-        telegram_message_id: msg.id.0 as i32,
-        sender_id: user_id,
-        message_text,
-        media_type,
-        media_file_id,
-        media_group_id,
-        proposal_group_id,
-        parent_message_id: Some(parent_id),
-    };
+    let notif_text = message_text.clone();
+    let notif_type = media_type.clone();
 
-    match state.db.save_message(&new_msg).await {
-        Ok(true) => {
-            state.db.clear_user_state(state.bot_id, user_id).await?;
-            bot.send_message(chat_id, L10n::reply_accepted(lang))
-                .await?;
-            notify_admins(bot, state, &new_msg, lang).await?;
-        }
-        Ok(false) => {}
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to save reply");
-            bot.send_message(chat_id, L10n::error_sending_reply(lang))
-                .await?;
-            state.db.clear_user_state(state.bot_id, user_id).await?;
-        }
+    let inserted = state
+        .proposals
+        .push(IncomingProposal {
+            chat_id: chat_id.0,
+            telegram_message_id: msg.id.0 as i32,
+            sender_id: user_id,
+            message_text,
+            media_type,
+            media_file_id,
+            media_group_id,
+            proposal_group_id,
+            parent_message_id: Some(parent_id),
+        })
+        .await;
+
+    if inserted {
+        // Стейт сброшен в дефолт - запись удаляется из мапы.
+        state.user_states.remove(&user_id);
+        bot.send_message(chat_id, L10n::reply_accepted(lang))
+            .await?;
+        notify_admins(bot, state, &notif_text, &notif_type, lang).await?;
     }
     Ok(())
 }
 
+/// Отправка причины отказа. Предложение выжигается из памяти ДО отправки:
+/// отправить его одному и тому же юзеру повторно невозможно.
 pub(super) async fn handle_send_reason(
     bot: &Bot,
     msg: &Message,
     state: &WorkerState,
-    target_user_id: i64,
+    entry: &UserStateEntry,
 ) -> R {
     let admin_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
 
+    if state
+        .proposals
+        .take_rejected(entry.proposal_id)
+        .await
+        .is_none()
+    {
+        state.user_states.remove(&admin_id);
+        bot.send_message(msg.chat.id, L10n::proposal_gone(lang))
+            .await?;
+        return Ok(());
+    }
+
     let _ = bot
-        .send_message(ChatId(target_user_id), L10n::rejected_reason(lang, reason))
+        .send_message(
+            ChatId(entry.temp_target_id),
+            L10n::rejected_reason(lang, reason),
+        )
         .await;
-    state.db.clear_user_state(state.bot_id, admin_id).await?;
+    state.user_states.remove(&admin_id);
     bot.send_message(msg.chat.id, L10n::reason_sent(lang))
         .await?;
     Ok(())
 }
 
+/// Бан автора отклонённого предложения. В базу уходит только хеш айди.
 pub(super) async fn handle_send_ban_reason(
     bot: &Bot,
     msg: &Message,
     state: &WorkerState,
-    target_user_id: i64,
+    entry: &UserStateEntry,
 ) -> R {
     let admin_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
+    let target_user_id = entry.temp_target_id;
+
+    let proposal = match state.proposals.take_rejected(entry.proposal_id).await {
+        Some(p) => p,
+        None => {
+            state.user_states.remove(&admin_id);
+            bot.send_message(msg.chat.id, L10n::proposal_gone(lang))
+                .await?;
+            return Ok(());
+        }
+    };
 
     match state
         .db
-        .create_ban_record(state.bot_id, target_user_id, reason)
+        .ban_user(state.bot_id, &hash_user_id(target_user_id), reason)
         .await
     {
         Ok(ban_id) => {
-            state.db.ban_user(state.bot_id, target_user_id).await?;
-            state.db.clear_user_state(state.bot_id, admin_id).await?;
-
+            state.user_states.remove(&admin_id);
             let _ = bot
                 .send_message(
                     ChatId(target_user_id),
@@ -241,17 +269,23 @@ pub(super) async fn handle_send_ban_reason(
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to ban user");
+            state.proposals.restore_rejected(proposal).await;
             bot.send_message(msg.chat.id, L10n::error_banning_user(lang))
                 .await?;
-            state.db.clear_user_state(state.bot_id, admin_id).await?;
         }
     }
     Ok(())
 }
 
-async fn notify_admins(bot: &Bot, state: &WorkerState, msg: &NewMessage, lang: Locale) -> R {
+async fn notify_admins(
+    bot: &Bot,
+    state: &WorkerState,
+    text: &str,
+    media_type: &str,
+    lang: Locale,
+) -> R {
     let admins = state.db.get_admins(state.bot_id).await?;
-    let notification = L10n::new_proposal_notif(lang, &msg.message_text, &msg.media_type);
+    let notification = L10n::new_proposal_notif(lang, text, media_type);
     for admin in admins {
         if !admin.frozen {
             let _ = bot.send_message(ChatId(admin.user_id), &notification).await;
@@ -266,21 +300,12 @@ pub(super) async fn show_next_proposal(
     state: &WorkerState,
     lang: Locale,
 ) -> R {
-    match state.db.get_next_pending_proposal(state.bot_id).await? {
+    match state.proposals.pop_next().await {
         None => {
             bot.send_message(chat_id, L10n::no_new_proposals(lang))
                 .await?;
         }
-        Some((gid,)) => {
-            let messages = state
-                .db
-                .get_proposal_by_group_id(state.bot_id, &gid)
-                .await?;
-            let proposal = Proposal {
-                group_id: gid,
-                messages,
-            };
-
+        Some(proposal) => {
             bot.send_message(
                 chat_id,
                 L10n::proposal_items_count(lang, proposal.messages.len()),

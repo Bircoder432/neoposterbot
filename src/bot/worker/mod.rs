@@ -1,8 +1,10 @@
 use anyhow::Result;
+use dashmap::DashMap;
 use std::sync::Arc;
 use teloxide::prelude::*;
 use tokio::sync::RwLock;
 
+use crate::bot::memory::ProposalStore;
 use crate::config::Config;
 use crate::db::repository::Database;
 
@@ -17,12 +19,21 @@ type R = Result<()>;
 type ResponseResult = std::result::Result<(), teloxide::RequestError>;
 
 #[derive(Clone)]
+pub struct UserStateEntry {
+    pub state: String,
+    pub temp_target_id: i64,
+    pub proposal_id: u64,
+}
+
+#[derive(Clone)]
 pub struct WorkerState {
     pub bot_id: i32,
     pub client_tg_id: i64,
     pub config: Arc<RwLock<crate::db::models::BotConfig>>,
     pub db: Database,
     pub master_config: Arc<Config>,
+    pub proposals: Arc<ProposalStore>,
+    pub user_states: Arc<DashMap<i64, UserStateEntry>>,
 }
 
 pub async fn run_worker_bot(
@@ -33,13 +44,14 @@ pub async fn run_worker_bot(
 ) -> R {
     let bot_id = bot_config.id;
     let client_tg_id = bot_config.client_tg_id.unwrap_or(0);
-
     let state = WorkerState {
         bot_id,
         client_tg_id,
         config: Arc::new(RwLock::new(bot_config)),
         db,
         master_config,
+        proposals: Arc::new(ProposalStore::new()),
+        user_states: Arc::new(DashMap::new()),
     };
 
     let handler = dptree::entry()
@@ -50,7 +62,6 @@ pub async fn run_worker_bot(
     let mut dispatcher = Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![state])
         .build();
-
     dispatcher.dispatch().await;
     Ok(())
 }
@@ -90,7 +101,6 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let _ = state.db.check_plan_limits(bot_id, state.client_tg_id).await;
 
     let setup_complete = state.db.is_setup_complete(bot_id).await?;
-
     if !setup_complete {
         if user_id != state.client_tg_id {
             return Ok(());
@@ -102,18 +112,21 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
         return commands::dispatch_command(bot, msg, state).await;
     }
 
-    if let Some(us) = state.db.get_user_state(bot_id, user_id).await? {
-        match us.state.as_str() {
+    if let Some(entry) = state.user_states.get(&user_id).map(|e| e.clone()) {
+        match entry.state.as_str() {
             "reply_mode" => {
-                return proposals::handle_reply_content(bot, msg, state, us.temp_target_id).await;
+                return proposals::handle_reply_content(bot, msg, state, entry.temp_target_id)
+                    .await;
             }
             "reason" => {
-                return proposals::handle_send_reason(bot, msg, state, us.temp_target_id).await;
+                return proposals::handle_send_reason(bot, msg, state, &entry).await;
             }
             "ban_reason" => {
-                return proposals::handle_send_ban_reason(bot, msg, state, us.temp_target_id).await;
+                return proposals::handle_send_ban_reason(bot, msg, state, &entry).await;
             }
-            _ => {}
+            _ => {
+                state.user_states.remove(&user_id);
+            }
         }
     }
 
