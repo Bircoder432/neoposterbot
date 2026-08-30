@@ -363,6 +363,7 @@ make by {username}"#,
         "reason_sent": "✅ Причина отправлена.",
         "rejected_reason": "Ваше сообщение отклонено по причине: {reason}",
         "new_proposal_notif": r#"📨 Новое предложение!
+
 💬 {text}
 📁 Тип: {media_type}
 
