@@ -336,3 +336,48 @@ pub(super) async fn show_next_proposal(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_link_public_match() {
+        let mut text = "Привет, посмотри https://t.me/mychan/15 вот это".to_string();
+        let res = parse_and_strip_tme_link(&mut text, 0, Some("mychan"));
+
+        assert_eq!(res, Some(15));
+        // Ссылка должна быть вырезана, а текст очищен от лишних пробелов по краям
+        assert_eq!(text, "Привет, посмотри  вот это");
+    }
+
+    #[test]
+    fn test_strip_link_private_match() {
+        // channel_id в Telegram для приватных каналов обычно начинается с -100
+        let mut text = "https://t.me/c/1234567890/42".to_string();
+        let res = parse_and_strip_tme_link(&mut text, -1001234567890, None);
+
+        assert_eq!(res, Some(42));
+        assert_eq!(text, ""); // Вся строка была ссылкой
+    }
+
+    #[test]
+    fn test_strip_link_no_match() {
+        let mut text = "Текст без ссылок https://t.me/otherchan/10".to_string();
+        let original_text = text.clone();
+
+        let res = parse_and_strip_tme_link(&mut text, 0, Some("mychan"));
+
+        assert_eq!(res, None);
+        assert_eq!(text, original_text);
+    }
+
+    #[test]
+    fn test_strip_link_case_insensitive() {
+        let mut text = "Check https://t.me/MyChAn/77 out".to_string();
+        let res = parse_and_strip_tme_link(&mut text, 0, Some("mychan"));
+
+        assert_eq!(res, Some(77));
+        assert!(!text.contains("https://"));
+    }
+}

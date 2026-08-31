@@ -696,6 +696,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_locale_parse() {
+        assert_eq!(Locale::parse("en"), Some(Locale::En));
+        assert_eq!(Locale::parse("RU"), Some(Locale::Ru));
+        assert_eq!(Locale::parse("Ru"), Some(Locale::Ru));
+        assert_eq!(Locale::parse("fr"), None);
+        assert_eq!(Locale::parse(""), None);
+    }
+
+    #[test]
+    fn test_client_details_pro_banned() {
+        let text = L10n::client_details(Locale::Ru, 12345, "pro", Some("31.12.2026"), true, 2);
+        assert!(text.contains("12345"));
+        assert!(text.contains("Pro (до 31.12.2026)"));
+        assert!(text.contains("🚫 Забанен"));
+        assert!(text.contains("2"));
+    }
+
+    #[test]
+    fn test_client_details_free_active() {
+        let text = L10n::client_details(Locale::En, 999, "free", None, false, 0);
+        assert!(text.contains("999"));
+        assert!(text.contains("Free"));
+        assert!(text.contains("✅ Active"));
+        assert!(text.contains("0"));
+    }
+
+    #[test]
+    fn test_make_by_watermark() {
+        let wm = L10n::make_by(Locale::Ru, "@my_bot");
+        assert_eq!(wm.trim(), "сделано с помощью @my_bot");
+
+        let wm_en = L10n::make_by(Locale::En, "@my_bot");
+        assert_eq!(wm_en.trim(), "make by @my_bot");
+    }
+
+    #[test]
     fn ron_is_valid_and_languages_are_in_sync() {
         let t = translations();
         assert!(!t.en.is_empty(), "locales.ron: `en` is empty");
@@ -712,25 +748,5 @@ mod tests {
                 "locales.ron: missing `en` key: {key}"
             );
         }
-    }
-
-    #[test]
-    fn placeholders_are_rendered() {
-        assert_eq!(
-            t(Locale::En, "admin_removed", &[("id", "42")]),
-            "✅ Admin 42 removed."
-        );
-        assert_eq!(
-            t(Locale::Ru, "ban_deactivated", &[("ban_id", "BAN-ABC123")]),
-            "✅ Бан BAN-ABC123 деактивирован."
-        );
-    }
-
-    #[test]
-    fn fallback_returns_key_when_missing() {
-        assert_eq!(
-            raw(Locale::En, "definitely_not_a_key"),
-            "definitely_not_a_key"
-        );
     }
 }

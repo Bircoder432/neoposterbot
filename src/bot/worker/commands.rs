@@ -262,9 +262,10 @@ fn parse_post_link(link: &str) -> Option<i32> {
     let path = &lower[pos + 5..];
     let path = path.split('?').next().unwrap_or(path);
     let parts: Vec<&str> = path.split('/').collect();
+
     if parts.len() >= 3 && parts[0] == "c" {
         parts[2].parse::<i32>().ok()
-    } else if parts.len() >= 2 {
+    } else if parts.len() >= 2 && parts[0] != "c" {
         parts[1].parse::<i32>().ok()
     } else {
         None
@@ -362,4 +363,43 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_post_link_public_channel() {
+        assert_eq!(
+            parse_post_link("https://t.me/my_awesome_channel/42"),
+            Some(42)
+        );
+        assert_eq!(parse_post_link("http://t.me/channel/100"), Some(100));
+        assert_eq!(parse_post_link("t.me/channel/999"), Some(999));
+    }
+
+    #[test]
+    fn test_parse_post_link_private_channel() {
+        assert_eq!(parse_post_link("https://t.me/c/1234567890/55"), Some(55));
+        assert_eq!(parse_post_link("https://t.me/c/9876543210/1"), Some(1));
+    }
+
+    #[test]
+    fn test_parse_post_link_with_query_params() {
+        assert_eq!(parse_post_link("https://t.me/channel/42?single"), Some(42));
+        assert_eq!(
+            parse_post_link("https://t.me/c/123/10?comment=123"),
+            Some(10)
+        );
+    }
+
+    #[test]
+    fn test_parse_post_link_invalid() {
+        assert_eq!(parse_post_link("not a link at all"), None);
+        assert_eq!(parse_post_link("https://t.me/username"), None); // Нет ID сообщения
+        assert_eq!(parse_post_link("https://t.me/c/12345"), None); // Нет ID сообщения для приватного
+        assert_eq!(parse_post_link("https://vk.com/wall123_456"), None); // Не t.me
+        assert_eq!(parse_post_link(""), None);
+    }
 }

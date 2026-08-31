@@ -136,3 +136,88 @@ impl ProposalStore {
         Some(proposal)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::models::IncomingProposal;
+
+    fn make_proposal(chat_id: i64, msg_id: i32, group_id: &str) -> IncomingProposal {
+        IncomingProposal {
+            chat_id,
+            telegram_message_id: msg_id,
+            sender_id: 123,
+            message_text: "test text".into(),
+            media_type: "photo".into(),
+            media_file_id: "file_123".into(),
+            media_group_id: if group_id.starts_with("mg_") {
+                Some(group_id.to_string())
+            } else {
+                None
+            },
+            proposal_group_id: group_id.to_string(),
+            parent_message_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_push_and_pop_single() {
+        let store = ProposalStore::new();
+        let p = make_proposal(1, 10, "single_1");
+
+        assert!(store.push(p).await);
+
+        let popped = store.pop_next().await.unwrap();
+        assert_eq!(popped.group_id, "single_1");
+        assert_eq!(popped.messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_deduplication() {
+        let store = ProposalStore::new();
+        let p1 = make_proposal(1, 10, "single_1");
+        let p2 = make_proposal(1, 10, "single_1");
+
+        assert!(store.push(p1).await);
+        assert!(!store.push(p2).await);
+
+        let popped = store.pop_next().await.unwrap();
+        assert_eq!(popped.messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_media_group_aggregation() {
+        let store = ProposalStore::new();
+        let p1 = make_proposal(1, 10, "mg_album_1");
+        let p2 = make_proposal(1, 11, "mg_album_1");
+        let p3 = make_proposal(1, 12, "mg_album_1");
+
+        store.push(p1).await;
+        store.push(p2).await;
+        store.push(p3).await;
+
+        let popped = store.pop_next().await.unwrap();
+        assert_eq!(popped.group_id, "mg_album_1");
+        assert_eq!(popped.messages.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_reject_and_restore() {
+        let store = ProposalStore::new();
+        store.push(make_proposal(1, 10, "single_1")).await;
+
+        let popped = store.pop_next().await.unwrap();
+        let id = popped.first().id;
+
+        let rejected = store.reject(id).await;
+        assert!(rejected.is_some());
+
+        assert!(store.pop_next().await.is_none());
+
+        let restored = store.return_to_pending(id).await;
+        assert!(restored.is_some());
+
+        let repopped = store.pop_next().await.unwrap();
+        assert_eq!(repopped.first().id, id);
+    }
+}
