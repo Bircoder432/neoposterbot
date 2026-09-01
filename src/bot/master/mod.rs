@@ -22,6 +22,7 @@ pub struct MasterState {
 #[derive(Clone)]
 pub enum FlowState {
     AwaitingToken,
+    AwaitingBotCheck,
 }
 
 pub async fn run_master_bot(state: Arc<MasterState>) -> Result<()> {

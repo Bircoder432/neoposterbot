@@ -63,6 +63,22 @@ pub(super) async fn process_master_callback(
         return Ok(());
     }
 
+    if data == "check_bot" {
+        state
+            .flow_states
+            .insert(user_id, FlowState::AwaitingBotCheck);
+        bot.send_message(
+            chat_id,
+            "🔍 <b>Проверка бота</b>\n\n\
+             Отправьте юзернейм бота (например, <code>@mybot</code>) для проверки.\n\n\
+             /cancel — отмена.",
+        )
+        .parse_mode(ParseMode::Html)
+        .await?;
+        bot.answer_callback_query(q.id.clone()).await?;
+        return Ok(());
+    }
+
     if let Some(bot_id_str) = data.strip_prefix("unbind_") {
         if let Ok(bot_id) = bot_id_str.parse::<i32>() {
             let bots = state.db.get_bots_by_client_tg_id(user_id).await?;

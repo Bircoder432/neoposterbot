@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 use teloxide::prelude::*;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, ParseMode};
 
 use super::ui;
 use super::{FlowState, MasterState};
@@ -22,6 +22,20 @@ pub(super) async fn process_master_message(
         if payment.invoice_payload == "pro_sub_1m" {
             let _ = state.db.upgrade_to_pro(user_id).await;
             bot.send_message(chat_id, "✅ Вы успешно приобрели Pro-подписку на 30 дней!\n\nОграничения на модераторов сняты, вотермарки отключены.").await?;
+        }
+        return Ok(());
+    }
+
+    if text.starts_with("/check") {
+        return handle_check_command(bot, chat_id, text, state).await;
+    }
+
+    if text.starts_with("/cancel") {
+        if state.flow_states.remove(&user_id).is_some() {
+            bot.send_message(chat_id, "✅ Действие отменено.").await?;
+        } else {
+            bot.send_message(chat_id, "ℹ️ Нет активного действия для отмены.")
+                .await?;
         }
         return Ok(());
     }
@@ -88,10 +102,16 @@ pub(super) async fn process_master_message(
             .pro_expires_at
             .map_or(false, |d| d > chrono::Utc::now());
 
-        let mut keyboard: Vec<Vec<InlineKeyboardButton>> = vec![vec![
-            InlineKeyboardButton::callback("➕ Добавить бота", "add_bot"),
-            InlineKeyboardButton::callback("🤖 Мои боты", "my_bots"),
-        ]];
+        let mut keyboard: Vec<Vec<InlineKeyboardButton>> = vec![
+            vec![
+                InlineKeyboardButton::callback("➕ Добавить бота", "add_bot"),
+                InlineKeyboardButton::callback("🤖 Мои боты", "my_bots"),
+            ],
+            vec![InlineKeyboardButton::callback(
+                "🔍 Проверить бота",
+                "check_bot",
+            )],
+        ];
 
         if is_pro {
             keyboard.push(vec![InlineKeyboardButton::callback(
@@ -153,7 +173,92 @@ pub(super) async fn process_master_message(
                         }
                     }
                 }
+                FlowState::AwaitingBotCheck => {
+                    let query = text.trim();
+                    if query.is_empty() || query.starts_with('/') {
+                        bot.send_message(chat_id, "❌ Отправьте юзернейм бота (например, @mybot).")
+                            .await?;
+                        return Ok(());
+                    }
+                    perform_bot_check(bot, chat_id, query, state).await?;
+                    state.flow_states.remove(&user_id);
+                }
             }
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_check_command(
+    bot: &Bot,
+    chat_id: ChatId,
+    text: &str,
+    state: &Arc<MasterState>,
+) -> R {
+    let parts: Vec<&str> = text.splitn(2, char::is_whitespace).collect();
+    if parts.len() < 2 || parts[1].trim().is_empty() {
+        bot.send_message(
+            chat_id,
+            "📝 <b>Использование:</b> <code>/check &lt;username&gt;</code>\n\n\
+             <b>Пример:</b> <code>/check @mybot</code>",
+        )
+        .parse_mode(ParseMode::Html)
+        .await?;
+        return Ok(());
+    }
+
+    let query = parts[1].trim();
+    perform_bot_check(bot, chat_id, query, state).await
+}
+
+async fn perform_bot_check(bot: &Bot, chat_id: ChatId, query: &str, state: &Arc<MasterState>) -> R {
+    let username = query.trim_start_matches('@');
+    if username.is_empty() {
+        bot.send_message(
+            chat_id,
+            "❌ Некорректный юзернейм. Используйте формат @username.",
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let service_name = &state.config.watermark_username;
+
+    let bot_cfg = state.db.find_active_bot_by_username(username).await?;
+
+    match bot_cfg {
+        Some(cfg) => {
+            let setup_status = if cfg.setup_complete {
+                "✅ Настроен и работает"
+            } else {
+                "⏳ Зарегистрирован, настройка не завершена"
+            };
+            let channel_info = cfg
+                .channel_username
+                .as_deref()
+                .map(|u| format!("@{}", u))
+                .unwrap_or_else(|| "—".to_string());
+
+            bot.send_message(
+                chat_id,
+                format!(
+                    "✅ Бот @{} обслуживается {}\n\n\
+                     📊 Статус: {}\n\
+                     📢 Канал: {}",
+                    cfg.bot_username, service_name, setup_status, channel_info
+                ),
+            )
+            .parse_mode(ParseMode::Html)
+            .await?;
+        }
+        None => {
+            bot.send_message(
+                chat_id,
+                format!("❌ Бот @{} не обслуживается {}", username, service_name),
+            )
+            .parse_mode(ParseMode::Html)
+            .await?;
         }
     }
 

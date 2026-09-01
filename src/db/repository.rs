@@ -212,6 +212,18 @@ impl Database {
             .bind(tg_user_id).fetch_all(&self.pool).await?)
     }
 
+    pub async fn find_active_bot_by_username(&self, username: &str) -> Result<Option<BotConfig>> {
+        let username = username.trim_start_matches('@');
+        Ok(sqlx::query_as(
+            "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b \
+             JOIN clients c ON b.client_id = c.id \
+             WHERE LOWER(b.bot_username) = LOWER($1) AND b.active = TRUE",
+        )
+        .bind(username)
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
     pub async fn deactivate_bot(&self, bot_id: i32) -> Result<()> {
         sqlx::query("UPDATE bots SET active = FALSE WHERE id = $1")
             .bind(bot_id)

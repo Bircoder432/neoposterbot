@@ -397,9 +397,9 @@ mod tests {
     #[test]
     fn test_parse_post_link_invalid() {
         assert_eq!(parse_post_link("not a link at all"), None);
-        assert_eq!(parse_post_link("https://t.me/username"), None); // Нет ID сообщения
-        assert_eq!(parse_post_link("https://t.me/c/12345"), None); // Нет ID сообщения для приватного
-        assert_eq!(parse_post_link("https://vk.com/wall123_456"), None); // Не t.me
+        assert_eq!(parse_post_link("https://t.me/username"), None);
+        assert_eq!(parse_post_link("https://t.me/c/12345"), None);
+        assert_eq!(parse_post_link("https://vk.com/wall123_456"), None);
         assert_eq!(parse_post_link(""), None);
     }
 }
