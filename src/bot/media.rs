@@ -254,10 +254,11 @@ pub async fn publish(
 
     if let Some(msg_id) = channel_msg_id {
         let reply_text = L10n::reply_link_text(lang);
-        let reply_link = format!(
-            "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a>"
+        let report_text = L10n::report_link_text(lang);
+        let links = format!(
+            "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a> | <a href=\"https://t.me/{bot_username}?start=report_{msg_id}\">{report_text}</a>"
         );
-        let final_caption = format!("{initial_caption}{reply_link}");
+        let final_caption = format!("{initial_caption}{links}");
         let _ = add_reply_link_to_post(bot, channel_id, msg_id, &final_caption, first).await;
     }
 

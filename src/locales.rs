@@ -689,6 +689,122 @@ impl L10n {
     pub fn channel_not_configured(l: Locale) -> &'static str {
         raw(l, "channel_not_configured")
     }
+    // ===== REPORTS =====
+
+    pub fn report_link_text(l: Locale) -> &'static str {
+        raw(l, "report_link_text")
+    }
+
+    pub fn send_report_to_post(l: Locale) -> &'static str {
+        raw(l, "send_report_to_post")
+    }
+
+    pub fn report_accepted(l: Locale) -> &'static str {
+        raw(l, "report_accepted")
+    }
+
+    pub fn report_empty_reason(l: Locale) -> &'static str {
+        raw(l, "report_empty_reason")
+    }
+
+    pub fn no_pending_reports(l: Locale) -> &'static str {
+        raw(l, "no_pending_reports")
+    }
+
+    pub fn report_display(l: Locale, id: i32, reason: &str, link: &str, date: &str) -> String {
+        let id = id.to_string();
+        t(
+            l,
+            "report_display",
+            &[
+                ("id", &id),
+                ("date", date),
+                ("reason", reason),
+                ("link", link),
+            ],
+        )
+    }
+
+    pub fn report_view_post_btn(l: Locale) -> &'static str {
+        raw(l, "report_view_post_btn")
+    }
+
+    pub fn report_dismiss_btn(l: Locale) -> &'static str {
+        raw(l, "report_dismiss_btn")
+    }
+
+    pub fn report_ban_btn(l: Locale) -> &'static str {
+        raw(l, "report_ban_btn")
+    }
+
+    pub fn report_dismissed_msg(l: Locale) -> &'static str {
+        raw(l, "report_dismissed_msg")
+    }
+
+    pub fn reporter_banned_msg(l: Locale, ban_id: &str) -> String {
+        t(l, "reporter_banned_msg", &[("ban_id", ban_id)])
+    }
+
+    pub fn reporter_already_banned(l: Locale) -> &'static str {
+        raw(l, "reporter_already_banned")
+    }
+
+    pub fn report_gone(l: Locale) -> &'static str {
+        raw(l, "report_gone")
+    }
+
+    pub fn report_ban_reason(l: Locale, reason: &str) -> String {
+        t(l, "report_ban_reason", &[("reason", reason)])
+    }
+
+    // ===== AUDIT LOG =====
+
+    pub fn audit_title(l: Locale) -> &'static str {
+        raw(l, "audit_title")
+    }
+
+    pub fn audit_empty(l: Locale) -> &'static str {
+        raw(l, "audit_empty")
+    }
+
+    pub fn audit_entry(
+        l: Locale,
+        i: usize,
+        date: &str,
+        admin: &str,
+        action: &str,
+        target: &str,
+    ) -> String {
+        let i = i.to_string();
+        t(
+            l,
+            "audit_entry",
+            &[
+                ("i", &i),
+                ("date", date),
+                ("admin", admin),
+                ("action", action),
+                ("target", target),
+            ],
+        )
+    }
+
+    pub fn audit_action_text(l: Locale, action: &str) -> String {
+        let key = match action {
+            "approve" => "audit_action_approve",
+            "reject" => "audit_action_reject",
+            "ban" => "audit_action_ban",
+            "pardon" => "audit_action_pardon",
+            "freeze" => "audit_action_freeze",
+            "unfreeze" => "audit_action_unfreeze",
+            "add_admin" => "audit_action_add_admin",
+            "remove_admin" => "audit_action_remove_admin",
+            "dismiss_report" => "audit_action_dismiss_report",
+            "ban_reporter" => "audit_action_ban_reporter",
+            _ => return action.to_string(),
+        };
+        raw(l, key).to_string()
+    }
 }
 
 #[cfg(test)]

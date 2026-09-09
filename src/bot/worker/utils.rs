@@ -27,3 +27,15 @@ pub(super) async fn resolve_user_name(bot: &Bot, user_id: i64) -> String {
         Err(_) => format!("user_{user_id}"),
     }
 }
+
+pub async fn get_admin_name(state: &WorkerState, user_id: i64) -> String {
+    if user_id == state.client_tg_id {
+        return "Owner".to_string();
+    }
+    if let Ok(admins) = state.db.get_admins(state.bot_id).await {
+        if let Some(admin) = admins.iter().find(|a| a.user_id == user_id) {
+            return admin.user_name.clone();
+        }
+    }
+    format!("user_{user_id}")
+}

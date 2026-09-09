@@ -239,7 +239,42 @@ make by {username}"#,
         "field_bots": "Bots",
         "field_username": "Username",
         "field_channel": "Channel",
-    },
+        "report_link_text": "⚠️ Report",
+        "send_report_to_post": r#"⚠️ Send your report. Describe what's wrong with this post.
+/cancel — cancel."#,
+        "report_accepted": "✅ Your report has been submitted. Moderators will review it.",
+        "report_empty_reason": "❌ Please send a text description of the problem.",
+        "no_pending_reports": "✅ No pending reports.",
+        "report_display": r#"⚠️ <b>Report #{id}</b>
+📅 {date}
+📝 Reason: {reason}
+🔗 Post: <a href="{link}">open</a>
+
+Choose action:"#,
+        "report_view_post_btn": "🔗 View post",
+        "report_dismiss_btn": "✅ Dismiss",
+        "report_ban_btn": "🚫 Ban reporter",
+        "report_dismissed_msg": "✅ Report dismissed.",
+        "reporter_banned_msg": "🚫 Reporter banned. Ban ID: {ban_id}",
+        "reporter_already_banned": "ℹ️ Reporter is already banned.",
+        "report_gone": "❌ Report already processed.",
+        "report_ban_reason": "Banned for false report. Original report: {reason}",
+        "audit_title": "📋 <b>Audit Log</b> (last 20 actions):\n\n",
+        "audit_empty": "📋 No actions logged yet.",
+        "audit_entry": r#"{i}. [{date}] {admin} — {action} {target}
+"#,
+"audit_action_approve": "Approved proposal",
+"audit_action_reject": "Rejected proposal",
+"audit_action_ban": "Banned user",
+"audit_action_pardon": "Pardoned ban",
+"audit_action_freeze": "Froze moderator",
+"audit_action_unfreeze": "Unfroze moderator",
+"audit_action_add_admin": "Added admin",
+"audit_action_remove_admin": "Removed admin",
+"audit_action_dismiss_report": "Dismissed report",
+"audit_action_ban_reporter": "Banned reporter",
+
+},
 
     ru: {
         // ===== приветствие и панели =====
@@ -480,5 +515,39 @@ make by {username}"#,
         "field_bots": "Ботов",
         "field_username": "Юзернейм",
         "field_channel": "Канал",
+        "report_link_text": "⚠️ Пожаловаться",
+        "send_report_to_post": r#"⚠️ Отправьте вашу жалобу. Опишите, что не так с этим постом.
+/cancel — отмена."#,
+        "report_accepted": "✅ Ваша жалоба отправлена. Модераторы её рассмотрят.",
+        "report_empty_reason": "❌ Пожалуйста, отправьте текстовое описание проблемы.",
+        "no_pending_reports": "✅ Нет ожидающих жалоб.",
+        "report_display": r#"⚠️ <b>Жалоба #{id}</b>
+📅 {date}
+📝 Причина: {reason}
+🔗 Пост: <a href="{link}">открыть</a>
+
+Выберите действие:"#,
+        "report_view_post_btn": "🔗 Открыть пост",
+        "report_dismiss_btn": "✅ Отклонить",
+        "report_ban_btn": "🚫 Забанить",
+        "report_dismissed_msg": "✅ Жалоба отклонена.",
+        "reporter_banned_msg": "🚫 Репортёр забанен. ID бана: {ban_id}",
+        "reporter_already_banned": "ℹ️ Репортёр уже забанен.",
+        "report_gone": "❌ Жалоба уже обработана.",
+        "report_ban_reason": "Бан за ложную жалобу. Оригинальная жалоба: {reason}",
+        "audit_title": "📋 <b>Журнал действий</b> (последние 20):\n\n",
+        "audit_empty": "📋 Записей пока нет.",
+        "audit_entry": r#"{i}. [{date}] {admin} — {action} {target}
+"#,
+"audit_action_approve": "Одобрил предложение",
+"audit_action_reject": "Отклонил предложение",
+"audit_action_ban": "Забанил пользователя",
+"audit_action_pardon": "Помиловал бан",
+"audit_action_freeze": "Заморозил модератора",
+"audit_action_unfreeze": "Разморозил модератора",
+"audit_action_add_admin": "Добавил модератора",
+"audit_action_remove_admin": "Удалил модератора",
+"audit_action_dismiss_report": "Отклонил жалобу",
+"audit_action_ban_reporter": "Забанил репортёра",
     },
 )

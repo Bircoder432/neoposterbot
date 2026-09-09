@@ -80,3 +80,25 @@ pub struct BanRecord {
     pub reason: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, FromRow)]
+pub struct Report {
+    pub id: i32,
+    pub bot_id: i32,
+    pub channel_msg_id: i32,
+    pub reporter_hash: String,
+    pub reason: String,
+    pub created_at: DateTime<Utc>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct AuditLog {
+    pub id: i32,
+    pub bot_id: i32,
+    pub admin_id: i64,
+    pub admin_name: String,
+    pub action: String,
+    pub target: String,
+    pub created_at: DateTime<Utc>,
+}

@@ -527,4 +527,102 @@ impl Database {
         .await?;
         Ok(())
     }
+
+    pub async fn create_report(
+        &self,
+        bot_id: i32,
+        channel_msg_id: i32,
+        reporter_hash: &str,
+        reason: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO reports (bot_id, channel_msg_id, reporter_hash, reason)
+             VALUES ($1, $2, $3, $4)",
+        )
+        .bind(bot_id)
+        .bind(channel_msg_id)
+        .bind(reporter_hash)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_pending_reports(&self, bot_id: i32) -> Result<Vec<Report>> {
+        Ok(sqlx::query_as(
+            "SELECT * FROM reports WHERE bot_id = $1 AND status = 'pending' ORDER BY created_at ASC",
+        )
+        .bind(bot_id)
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    pub async fn get_report_by_id(&self, bot_id: i32, report_id: i32) -> Result<Option<Report>> {
+        Ok(sqlx::query_as(
+            "SELECT * FROM reports WHERE id = $1 AND bot_id = $2 AND status = 'pending'",
+        )
+        .bind(report_id)
+        .bind(bot_id)
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
+    pub async fn dismiss_report(&self, bot_id: i32, report_id: i32) -> Result<()> {
+        sqlx::query("UPDATE reports SET status = 'dismissed' WHERE id = $1 AND bot_id = $2")
+            .bind(report_id)
+            .bind(bot_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn resolve_report(&self, bot_id: i32, report_id: i32) -> Result<()> {
+        sqlx::query("UPDATE reports SET status = 'resolved' WHERE id = $1 AND bot_id = $2")
+            .bind(report_id)
+            .bind(bot_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn count_pending_reports(&self, bot_id: i32) -> Result<i64> {
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM reports WHERE bot_id = $1 AND status = 'pending'")
+                .bind(bot_id)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(row.0)
+    }
+
+    pub async fn log_action(
+        &self,
+        bot_id: i32,
+        admin_id: i64,
+        admin_name: &str,
+        action: &str,
+        target: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO audit_logs (bot_id, admin_id, admin_name, action, target)
+             VALUES ($1, $2, $3, $4, $5)",
+        )
+        .bind(bot_id)
+        .bind(admin_id)
+        .bind(admin_name)
+        .bind(action)
+        .bind(target)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_audit_logs(&self, bot_id: i32, limit: i64) -> Result<Vec<AuditLog>> {
+        Ok(sqlx::query_as(
+            "SELECT * FROM audit_logs WHERE bot_id = $1 ORDER BY created_at DESC LIMIT $2",
+        )
+        .bind(bot_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?)
+    }
 }

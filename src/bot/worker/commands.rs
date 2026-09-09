@@ -3,6 +3,7 @@ use teloxide::types::MessageId;
 
 use super::admins;
 use super::proposals;
+use super::reports;
 use super::utils;
 use crate::bot::media;
 use crate::bot::worker::{UserStateEntry, WorkerState};
@@ -30,6 +31,8 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
         "pardon" => handle_pardon(bot, msg, state, args).await,
         "reply" => handle_reply_command(bot, msg, state, args).await,
         "addreplies" => handle_add_replies(bot, msg, state, args).await,
+        "reports" => handle_reports(bot, msg, state).await,
+        "audit" => handle_audit(bot, msg, state).await,
         "lang" => handle_set_language(bot, msg, state, args).await,
         "cancel" => handle_cancel(bot, msg, state).await,
         _ => Ok(()),
@@ -85,6 +88,15 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
         return admins::handle_admin_invite(bot, chat_id, user_id, code, state, lang).await;
     }
 
+    if state
+        .db
+        .is_banned(state.bot_id, &hash_user_id(user_id))
+        .await?
+    {
+        bot.send_message(chat_id, L10n::user_banned(lang)).await?;
+        return Ok(());
+    }
+
     if let Some(parent_id_str) = args.strip_prefix("reply_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
@@ -106,12 +118,24 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
         return Ok(());
     }
 
-    if state
-        .db
-        .is_banned(state.bot_id, &hash_user_id(user_id))
-        .await?
-    {
-        bot.send_message(chat_id, L10n::user_banned(lang)).await?;
+    if let Some(parent_id_str) = args.strip_prefix("report_") {
+        if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
+            if channel_msg_id > 0 {
+                state.user_states.insert(
+                    user_id,
+                    UserStateEntry {
+                        state: "report_mode".to_string(),
+                        temp_target_id: channel_msg_id as i64,
+                        proposal_id: 0,
+                    },
+                );
+                bot.send_message(chat_id, L10n::send_report_to_post(lang))
+                    .await?;
+                return Ok(());
+            }
+        }
+        bot.send_message(chat_id, L10n::invalid_reply_link(lang))
+            .await?;
         return Ok(());
     }
 
@@ -185,6 +209,59 @@ async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     proposals::show_next_proposal(bot, msg.chat.id, state, lang).await
 }
 
+async fn handle_reports(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
+    let user_id = msg.from.as_ref().unwrap().id.0 as i64;
+    let lang = state.db.get_language(state.bot_id).await?;
+
+    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
+        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+            .await?;
+        return Ok(());
+    }
+
+    if !utils::is_authorized(state, user_id).await? {
+        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        return Ok(());
+    }
+
+    reports::show_next_report(bot, msg.chat.id, state, lang).await
+}
+
+async fn handle_audit(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
+    let user_id = msg.from.as_ref().unwrap().id.0 as i64;
+    let lang = state.db.get_language(state.bot_id).await?;
+
+    if user_id != state.client_tg_id {
+        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        return Ok(());
+    }
+
+    let logs = state.db.get_audit_logs(state.bot_id, 20).await?;
+    if logs.is_empty() {
+        bot.send_message(msg.chat.id, L10n::audit_empty(lang))
+            .await?;
+        return Ok(());
+    }
+
+    let mut text = L10n::audit_title(lang).to_string();
+    for (i, log) in logs.iter().enumerate() {
+        let date_str = log.created_at.format("%d.%m.%Y %H:%M").to_string();
+        let action_text = L10n::audit_action_text(lang, &log.action);
+        text.push_str(&L10n::audit_entry(
+            lang,
+            i + 1,
+            &date_str,
+            &log.admin_name,
+            &action_text,
+            &log.target,
+        ));
+    }
+    bot.send_message(msg.chat.id, text)
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .await?;
+    Ok(())
+}
+
 async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
@@ -213,6 +290,12 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
                 .await?;
         }
         Some(record) => {
+            let admin_name = utils::get_admin_name(state, user_id).await;
+            let _ = state
+                .db
+                .log_action(state.bot_id, user_id, &admin_name, "pardon", ban_id)
+                .await;
+
             bot.send_message(msg.chat.id, L10n::ban_deactivated(lang, &record.ban_id))
                 .await?;
         }
@@ -335,17 +418,32 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
         .unwrap_or_default();
     let _ = bot.delete_message(ChatId(user_id), forwarded.id).await;
 
-    if current_text.contains("start=reply_") {
+    let has_reply = current_text.contains("start=reply_");
+    let has_report = current_text.contains("start=report_");
+
+    if has_reply && has_report {
         bot.send_message(msg.chat.id, L10n::addreplies_already_exists(lang))
             .await?;
         return Ok(());
     }
 
-    let reply_text = L10n::reply_link_text(lang);
-    let reply_link = format!(
-        "\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
-    );
-    let new_text = format!("{current_text}{reply_link}");
+    let mut new_text = current_text;
+
+    if !has_reply {
+        let reply_text = L10n::reply_link_text(lang);
+        let reply_link = format!(
+            "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
+        );
+        new_text.push_str(&reply_link);
+    }
+
+    if !has_report {
+        let report_text = L10n::report_link_text(lang);
+        let report_link = format!(
+            " | <a href=\"https://t.me/{bot_username}?start=report_{channel_msg_id}\">{report_text}</a>"
+        );
+        new_text.push_str(&report_link);
+    }
 
     match media::add_reply_to_channel_post(bot, channel_id, channel_msg_id, &new_text, &forwarded)
         .await

@@ -4,6 +4,7 @@ use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessi
 
 use super::admins;
 use super::proposals;
+use super::reports;
 use super::utils;
 use crate::bot::media;
 use crate::bot::worker::{UserStateEntry, WorkerState};
@@ -118,6 +119,19 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                     .db
                     .set_admin_frozen(state.bot_id, target_id, true)
                     .await?;
+
+                let admin_name = utils::get_admin_name(state, user_id).await;
+                let _ = state
+                    .db
+                    .log_action(
+                        state.bot_id,
+                        user_id,
+                        &admin_name,
+                        "freeze",
+                        &target_id.to_string(),
+                    )
+                    .await;
+
                 let admins_list = state.db.get_admins(state.bot_id).await?;
                 if let Some(admin) = admins_list.iter().find(|a| a.user_id == target_id) {
                     let (text, kb) = admins::build_admin_manage_inline(admin, lang);
@@ -153,6 +167,19 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                     .db
                     .set_admin_frozen(state.bot_id, target_id, false)
                     .await?;
+
+                let admin_name = utils::get_admin_name(state, user_id).await;
+                let _ = state
+                    .db
+                    .log_action(
+                        state.bot_id,
+                        user_id,
+                        &admin_name,
+                        "unfreeze",
+                        &target_id.to_string(),
+                    )
+                    .await;
+
                 let admins_list = state.db.get_admins(state.bot_id).await?;
                 if let Some(admin) = admins_list.iter().find(|a| a.user_id == target_id) {
                     let (text, kb) = admins::build_admin_manage_inline(admin, lang);
@@ -198,6 +225,19 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             let target_id: i64 = id_str.parse().unwrap_or(0);
             if target_id > 0 && target_id != state.client_tg_id {
                 state.db.remove_admin(state.bot_id, target_id).await?;
+
+                let admin_name = utils::get_admin_name(state, user_id).await;
+                let _ = state
+                    .db
+                    .log_action(
+                        state.bot_id,
+                        user_id,
+                        &admin_name,
+                        "remove_admin",
+                        &target_id.to_string(),
+                    )
+                    .await;
+
                 let _ = bot
                     .send_message(ChatId(target_id), L10n::admin_removed_notification(lang))
                     .await;
@@ -224,6 +264,20 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             bot.answer_callback_query(q.id.clone()).await?;
             return Ok(());
         }
+    }
+
+    if let Some(id_str) = data.strip_prefix("report_dismiss_") {
+        if let Ok(report_id) = id_str.parse::<i32>() {
+            reports::handle_report_dismiss(bot, chat_id, report_id, q, state, lang).await?;
+        }
+        return Ok(());
+    }
+
+    if let Some(id_str) = data.strip_prefix("report_ban_") {
+        if let Ok(report_id) = id_str.parse::<i32>() {
+            reports::handle_report_ban(bot, chat_id, report_id, q, state, lang).await?;
+        }
+        return Ok(());
     }
 
     if let Some(id_str) = data.strip_prefix("discardnext_") {
@@ -313,6 +367,18 @@ async fn handle_approve(
     .await
     {
         Ok(Some(_channel_msg_id)) => {
+            let admin_name = utils::get_admin_name(state, q.from.id.0 as i64).await;
+            let _ = state
+                .db
+                .log_action(
+                    state.bot_id,
+                    q.from.id.0 as i64,
+                    &admin_name,
+                    "approve",
+                    &id.to_string(),
+                )
+                .await;
+
             bot.answer_callback_query(q.id.clone())
                 .text(L10n::published(lang))
                 .await?;

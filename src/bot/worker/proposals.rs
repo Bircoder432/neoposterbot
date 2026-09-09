@@ -158,6 +158,15 @@ pub(super) async fn handle_reply_content(
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
 
+    if state
+        .db
+        .is_banned(state.bot_id, &hash_user_id(user_id))
+        .await?
+    {
+        bot.send_message(chat_id, L10n::user_banned(lang)).await?;
+        return Ok(());
+    }
+
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let message_text = media::extract_message_text(msg, lang);
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
@@ -184,7 +193,6 @@ pub(super) async fn handle_reply_content(
         .await;
 
     if inserted {
-        // Стейт сброшен в дефолт - запись удаляется из мапы.
         state.user_states.remove(&user_id);
         bot.send_message(chat_id, L10n::reply_accepted(lang))
             .await?;
@@ -221,6 +229,19 @@ pub(super) async fn handle_send_reason(
             L10n::rejected_reason(lang, reason),
         )
         .await;
+
+    let admin_name = utils::get_admin_name(state, admin_id).await;
+    let _ = state
+        .db
+        .log_action(
+            state.bot_id,
+            admin_id,
+            &admin_name,
+            "reject",
+            &entry.proposal_id.to_string(),
+        )
+        .await;
+
     state.user_states.remove(&admin_id);
     bot.send_message(msg.chat.id, L10n::reason_sent(lang))
         .await?;
@@ -262,6 +283,12 @@ pub(super) async fn handle_send_ban_reason(
         .await
     {
         Ok(()) => {
+            let admin_name = utils::get_admin_name(state, admin_id).await;
+            let _ = state
+                .db
+                .log_action(state.bot_id, admin_id, &admin_name, "ban", &ban_id)
+                .await;
+
             state.user_states.remove(&admin_id);
             bot.send_message(msg.chat.id, L10n::user_banned_success(lang))
                 .await?;
@@ -347,18 +374,16 @@ mod tests {
         let res = parse_and_strip_tme_link(&mut text, 0, Some("mychan"));
 
         assert_eq!(res, Some(15));
-        // Ссылка должна быть вырезана, а текст очищен от лишних пробелов по краям
         assert_eq!(text, "Привет, посмотри  вот это");
     }
 
     #[test]
     fn test_strip_link_private_match() {
-        // channel_id в Telegram для приватных каналов обычно начинается с -100
         let mut text = "https://t.me/c/1234567890/42".to_string();
         let res = parse_and_strip_tme_link(&mut text, -1001234567890, None);
 
         assert_eq!(res, Some(42));
-        assert_eq!(text, ""); // Вся строка была ссылкой
+        assert_eq!(text, "");
     }
 
     #[test]

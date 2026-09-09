@@ -12,6 +12,7 @@ mod admins;
 mod callbacks;
 mod commands;
 mod proposals;
+mod reports;
 mod setup;
 mod utils;
 
@@ -117,6 +118,9 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
             "reply_mode" => {
                 return proposals::handle_reply_content(bot, msg, state, entry.temp_target_id)
                     .await;
+            }
+            "report_mode" => {
+                return reports::handle_report_content(bot, msg, state, entry.temp_target_id).await;
             }
             "reason" => {
                 return proposals::handle_send_reason(bot, msg, state, &entry).await;
