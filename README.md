@@ -38,7 +38,7 @@ docker compose up -d --build
 ```yaml
 # compose.yml (фрагмент)
 constructor_bot:
-  image: ghcr.io/ТВОЙ_ЮЗЕРНЕЙМ/ИМЯ_РЕПЫ:latest
+  image: ghcr.io/bircoder432/neoposterbot:latest
   restart: unless-stopped
   env_file: .env
   depends_on: [db]
