@@ -1,6 +1,3 @@
-use teloxide::prelude::*;
-use teloxide::types::MessageId;
-
 use super::admins;
 use super::proposals;
 use super::reports;
@@ -8,7 +5,10 @@ use super::utils;
 use crate::bot::media;
 use crate::bot::worker::{UserStateEntry, WorkerState};
 use crate::hashing::hash_user_id;
-use crate::locales::{L10n, Locale};
+use crate::l10n;
+use crate::locales::Locale;
+use teloxide::prelude::*;
+use teloxide::types::MessageId;
 
 type R = anyhow::Result<()>;
 
@@ -21,7 +21,6 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
         .trim_start_matches('/')
         .to_lowercase();
     let args = parts.next().unwrap_or("").trim();
-
     match cmd.as_str() {
         "start" => handle_start(bot, msg, state, args).await,
         "proposals" => handle_proposals(bot, msg, state).await,
@@ -42,12 +41,11 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
 async fn handle_cancel(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if state.user_states.remove(&user_id).is_some() {
-        bot.send_message(msg.chat.id, L10n::mode_cancelled(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "mode_cancelled"))
             .await?;
     } else {
-        bot.send_message(msg.chat.id, L10n::no_active_mode(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "no_active_mode"))
             .await?;
     }
     Ok(())
@@ -56,23 +54,22 @@ async fn handle_cancel(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
         return Ok(());
     }
-
     match Locale::parse(args.trim()) {
         Some(new_lang) => {
             state.db.set_language(state.bot_id, new_lang).await?;
             let mut cfg = state.config.write().await;
             cfg.lang = new_lang.as_str().to_string();
             drop(cfg);
-            bot.send_message(msg.chat.id, L10n::lang_updated(new_lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "lang_updated"))
                 .await?;
         }
         None => {
-            bot.send_message(msg.chat.id, L10n::lang_invalid(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "lang_invalid"))
                 .await?;
         }
     }
@@ -83,20 +80,18 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if let Some(code) = args.strip_prefix("admin_") {
         return admins::handle_admin_invite(bot, chat_id, user_id, code, state, lang).await;
     }
-
     if state
         .db
         .is_banned(state.bot_id, &hash_user_id(user_id))
         .await?
     {
-        bot.send_message(chat_id, L10n::user_banned(lang)).await?;
+        bot.send_message(chat_id, l10n!(lang, "user_banned"))
+            .await?;
         return Ok(());
     }
-
     if let Some(parent_id_str) = args.strip_prefix("reply_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
@@ -108,16 +103,15 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
                         proposal_id: 0,
                     },
                 );
-                bot.send_message(chat_id, L10n::send_reply_to_post(lang))
+                bot.send_message(chat_id, l10n!(lang, "send_reply_to_post"))
                     .await?;
                 return Ok(());
             }
         }
-        bot.send_message(chat_id, L10n::invalid_reply_link(lang))
+        bot.send_message(chat_id, l10n!(lang, "invalid_reply_link"))
             .await?;
         return Ok(());
     }
-
     if let Some(parent_id_str) = args.strip_prefix("report_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
@@ -129,27 +123,27 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
                         proposal_id: 0,
                     },
                 );
-                bot.send_message(chat_id, L10n::send_report_to_post(lang))
+                bot.send_message(chat_id, l10n!(lang, "send_report_to_post"))
                     .await?;
                 return Ok(());
             }
         }
-        bot.send_message(chat_id, L10n::invalid_reply_link(lang))
+        bot.send_message(chat_id, l10n!(lang, "invalid_reply_link"))
             .await?;
         return Ok(());
     }
-
     if state.client_tg_id == user_id {
-        bot.send_message(chat_id, L10n::owner_panel(lang)).await?;
+        bot.send_message(chat_id, l10n!(lang, "owner_panel"))
+            .await?;
     } else if utils::is_authorized(state, user_id).await? {
         if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-            bot.send_message(chat_id, L10n::mod_frozen_panel(lang))
+            bot.send_message(chat_id, l10n!(lang, "mod_frozen_panel"))
                 .await?;
         } else {
-            bot.send_message(chat_id, L10n::mod_panel(lang)).await?;
+            bot.send_message(chat_id, l10n!(lang, "mod_panel")).await?;
         }
     } else {
-        bot.send_message(chat_id, L10n::welcome(lang)).await?;
+        bot.send_message(chat_id, l10n!(lang, "welcome")).await?;
     }
     Ok(())
 }
@@ -157,27 +151,24 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
 async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
             .await?;
         return Ok(());
     }
-
     if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
         return Ok(());
     }
-
     let channel_msg_id: i32 = match args.trim().parse() {
         Ok(id) if id > 0 => id,
         _ => {
-            bot.send_message(msg.chat.id, L10n::reply_usage(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "reply_usage"))
                 .await?;
             return Ok(());
         }
     };
-
     state.user_states.insert(
         user_id,
         UserStateEntry {
@@ -186,7 +177,7 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
             proposal_id: 0,
         },
     );
-    bot.send_message(msg.chat.id, L10n::send_reply_to_post(lang))
+    bot.send_message(msg.chat.id, l10n!(lang, "send_reply_to_post"))
         .await?;
     Ok(())
 }
@@ -194,66 +185,79 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
 async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
             .await?;
         return Ok(());
     }
-
     if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
         return Ok(());
     }
-
     proposals::show_next_proposal(bot, msg.chat.id, state, lang).await
 }
 
 async fn handle_reports(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
             .await?;
         return Ok(());
     }
-
     if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
         return Ok(());
     }
-
     reports::show_next_report(bot, msg.chat.id, state, lang).await
 }
 
 async fn handle_audit(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if user_id != state.client_tg_id {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
-        return Ok(());
-    }
-
-    let logs = state.db.get_audit_logs(state.bot_id, 20).await?;
-    if logs.is_empty() {
-        bot.send_message(msg.chat.id, L10n::audit_empty(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
             .await?;
         return Ok(());
     }
-
-    let mut text = L10n::audit_title(lang).to_string();
+    let logs = state.db.get_audit_logs(state.bot_id, 20).await?;
+    if logs.is_empty() {
+        bot.send_message(msg.chat.id, l10n!(lang, "audit_empty"))
+            .await?;
+        return Ok(());
+    }
+    let mut text = l10n!(lang, "audit_title");
     for (i, log) in logs.iter().enumerate() {
         let date_str = log.created_at.format("%d.%m.%Y %H:%M").to_string();
-        let action_text = L10n::audit_action_text(lang, &log.action);
-        text.push_str(&L10n::audit_entry(
+        let action_key = match log.action.as_str() {
+            "approve" => "audit_action_approve",
+            "reject" => "audit_action_reject",
+            "ban" => "audit_action_ban",
+            "pardon" => "audit_action_pardon",
+            "freeze" => "audit_action_freeze",
+            "unfreeze" => "audit_action_unfreeze",
+            "add_admin" => "audit_action_add_admin",
+            "remove_admin" => "audit_action_remove_admin",
+            "dismiss_report" => "audit_action_dismiss_report",
+            "ban_reporter" => "audit_action_ban_reporter",
+            "delete_post" => "audit_action_delete_post",
+            _ => "",
+        };
+        let action_text = if action_key.is_empty() {
+            log.action.clone()
+        } else {
+            l10n!(lang, action_key)
+        };
+        text.push_str(&l10n!(
             lang,
-            i + 1,
-            &date_str,
-            &log.admin_name,
-            &action_text,
-            &log.target,
+            "audit_entry",
+            i = i + 1,
+            date = date_str,
+            admin = log.admin_name,
+            action = action_text,
+            target = log.target
         ));
     }
     bot.send_message(msg.chat.id, text)
@@ -265,28 +269,25 @@ async fn handle_audit(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
             .await?;
         return Ok(());
     }
-
     if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
         return Ok(());
     }
-
     let ban_id = args.trim();
     if ban_id.is_empty() {
-        bot.send_message(msg.chat.id, L10n::pardon_usage(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "pardon_usage"))
             .await?;
         return Ok(());
     }
-
     match state.db.pardon_by_ban_id(state.bot_id, ban_id).await? {
         None => {
-            bot.send_message(msg.chat.id, L10n::ban_not_found(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "ban_not_found"))
                 .await?;
         }
         Some(record) => {
@@ -295,9 +296,11 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
                 .db
                 .log_action(state.bot_id, user_id, &admin_name, "pardon", ban_id)
                 .await;
-
-            bot.send_message(msg.chat.id, L10n::ban_deactivated(lang, &record.ban_id))
-                .await?;
+            bot.send_message(
+                msg.chat.id,
+                l10n!(lang, "ban_deactivated", ban_id = record.ban_id),
+            )
+            .await?;
         }
     }
     Ok(())
@@ -306,33 +309,31 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
 async fn handle_banned(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
             .await?;
         return Ok(());
     }
-
     if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
         return Ok(());
     }
-
     let records = state.db.get_active_ban_records(state.bot_id).await?;
     if records.is_empty() {
-        bot.send_message(msg.chat.id, L10n::no_active_bans(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "no_active_bans"))
             .await?;
         return Ok(());
     }
-
-    let mut list = L10n::active_bans_header(lang).to_string();
+    let mut list = l10n!(lang, "active_bans_header");
     for (i, record) in records.iter().enumerate() {
-        list.push_str(&L10n::ban_record_entry(
+        list.push_str(&l10n!(
             lang,
-            i + 1,
-            &record.ban_id,
-            &record.reason,
-            &record.created_at.format("%d.%m.%Y %H:%M").to_string(),
+            "ban_record_entry",
+            i = i + 1,
+            ban_id = record.ban_id,
+            reason = record.reason,
+            date = record.created_at.format("%d.%m.%Y %H:%M").to_string()
         ));
     }
     bot.send_message(msg.chat.id, list).await?;
@@ -345,7 +346,6 @@ fn parse_post_link(link: &str) -> Option<i32> {
     let path = &lower[pos + 5..];
     let path = path.split('?').next().unwrap_or(path);
     let parts: Vec<&str> = path.split('/').collect();
-
     if parts.len() >= 3 && parts[0] == "c" {
         parts[2].parse::<i32>().ok()
     } else if parts.len() >= 2 && parts[0] != "c" {
@@ -358,39 +358,34 @@ fn parse_post_link(link: &str) -> Option<i32> {
 async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::mod_frozen_action(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
             .await?;
         return Ok(());
     }
-
     if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, L10n::no_access(lang)).await?;
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
         return Ok(());
     }
-
     let link = args.trim();
     if link.is_empty() {
-        bot.send_message(msg.chat.id, L10n::addreplies_usage(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "addreplies_usage"))
             .await?;
         return Ok(());
     }
-
     let channel_msg_id = match parse_post_link(link) {
         Some(id) if id > 0 => id,
         _ => {
-            bot.send_message(msg.chat.id, L10n::addreplies_invalid_link(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "addreplies_invalid_link"))
                 .await?;
             return Ok(());
         }
     };
-
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
     let bot_username = cfg.bot_username.clone();
     drop(cfg);
-
     let forwarded = bot
         .forward_message(
             ChatId(user_id),
@@ -398,64 +393,56 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
             MessageId(channel_msg_id),
         )
         .await;
-
     let forwarded = match forwarded {
         Ok(m) => m,
         Err(e) => {
             bot.send_message(
                 msg.chat.id,
-                L10n::addreplies_failed_get(lang, &e.to_string()),
+                l10n!(lang, "addreplies_failed_get", e = e.to_string()),
             )
             .await?;
             return Ok(());
         }
     };
-
     let current_text = forwarded
         .text()
         .map(|s| s.to_string())
         .or_else(|| forwarded.caption().map(|s| s.to_string()))
         .unwrap_or_default();
     let _ = bot.delete_message(ChatId(user_id), forwarded.id).await;
-
     let has_reply = current_text.contains("start=reply_");
     let has_report = current_text.contains("start=report_");
-
     if has_reply && has_report {
-        bot.send_message(msg.chat.id, L10n::addreplies_already_exists(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "addreplies_already_exists"))
             .await?;
         return Ok(());
     }
-
     let mut new_text = current_text;
-
     if !has_reply {
-        let reply_text = L10n::reply_link_text(lang);
+        let reply_text = l10n!(lang, "reply_link_text");
         let reply_link = format!(
-            "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
+            "\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
         );
         new_text.push_str(&reply_link);
     }
-
     if !has_report {
-        let report_text = L10n::report_link_text(lang);
+        let report_text = l10n!(lang, "report_link_text");
         let report_link = format!(
             " | <a href=\"https://t.me/{bot_username}?start=report_{channel_msg_id}\">{report_text}</a>"
         );
         new_text.push_str(&report_link);
     }
-
     match media::add_reply_to_channel_post(bot, channel_id, channel_msg_id, &new_text, &forwarded)
         .await
     {
         Ok(()) => {
-            bot.send_message(msg.chat.id, L10n::addreplies_success(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "addreplies_success"))
                 .await?;
         }
         Err(e) => {
             bot.send_message(
                 msg.chat.id,
-                L10n::addreplies_failed_edit(lang, &e.to_string()),
+                l10n!(lang, "addreplies_failed_edit", e = e.to_string()),
             )
             .await?;
         }

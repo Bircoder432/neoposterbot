@@ -1,11 +1,10 @@
+use super::ui;
+use super::{FlowState, MasterState};
+use crate::l10n;
 use anyhow::Result;
 use std::sync::Arc;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, ParseMode};
-
-use super::ui;
-use super::{FlowState, MasterState};
-use crate::locales::L10n;
 
 type R = Result<()>;
 
@@ -21,7 +20,7 @@ pub(super) async fn process_master_message(
     if let Some(payment) = msg.successful_payment() {
         if payment.invoice_payload == "pro_sub_1m" {
             let _ = state.db.upgrade_to_pro(user_id).await;
-            bot.send_message(chat_id, "✅ Вы успешно приобрели Pro-подписку на 30 дней!\n\nОграничения на модераторов сняты, вотермарки отключены.").await?;
+            bot.send_message(chat_id, "✅ Вы успешно приобрели Pro-подписку на 30 дней!\nОграничения на модераторов сняты, вотермарки отключены.").await?;
         }
         return Ok(());
     }
@@ -42,9 +41,9 @@ pub(super) async fn process_master_message(
 
     if user_id == state.config.owner_id {
         let lang = super::get_locale(state, user_id).await;
-
         if text.starts_with("/help") {
-            bot.send_message(chat_id, L10n::master_help(lang)).await?;
+            bot.send_message(chat_id, l10n!(lang, "master_help"))
+                .await?;
             return Ok(());
         } else if text.starts_with("/clients") {
             ui::send_clients_page(bot, chat_id, state, 0, lang).await?;
@@ -54,7 +53,7 @@ pub(super) async fn process_master_message(
             let bots = state.db.get_all_bots().await?;
             let (pro_count, free_count) = state.db.get_stats().await.unwrap_or((0, 0));
             let txt = format!(
-                "📊 Статистика:\n\nВсего клиентов: {}\nАктивных ботов: {}\n\nPro-клиентов: {}\nFree-клиентов: {}",
+                "📊 Статистика:\nВсего клиентов: {}\nАктивных ботов: {}\nPro-клиентов: {}\nFree-клиентов: {}",
                 clients.len(),
                 bots.len(),
                 pro_count,
@@ -101,7 +100,6 @@ pub(super) async fn process_master_message(
         let is_pro = client
             .pro_expires_at
             .map_or(false, |d| d > chrono::Utc::now());
-
         let mut keyboard: Vec<Vec<InlineKeyboardButton>> = vec![
             vec![
                 InlineKeyboardButton::callback("➕ Добавить бота", "add_bot"),
@@ -112,7 +110,6 @@ pub(super) async fn process_master_message(
                 "check_bot",
             )],
         ];
-
         if is_pro {
             keyboard.push(vec![InlineKeyboardButton::callback(
                 "✅ Pro подписка активна",
@@ -124,18 +121,15 @@ pub(super) async fn process_master_message(
                 "buy_pro",
             )]);
         }
-
         keyboard.push(vec![InlineKeyboardButton::url(
             "📚 Инструкция",
             state.config.instruction_url.clone(),
         )]);
-
         let kb = InlineKeyboardMarkup::new(keyboard);
-        bot.send_message(chat_id, "Добро пожаловать в конструктор предложек!\n\nЗдесь вы можете создать своего бота для анонимных предложений и привязать его к вашему Telegram-каналу.\n\nПриобретите Pro-подписку для снятия ограничений на модераторов и отключения вотермарок.")
-           .reply_markup(kb).await?;
+        bot.send_message(chat_id, "Добро пожаловать в конструктор предложек!\nЗдесь вы можете создать своего бота для анонимных предложений и привязать его к вашему Telegram-каналу.\nПриобретите Pro-подписку для снятия ограничений на модераторов и отключения вотермарок.")
+            .reply_markup(kb).await?;
     } else {
         let flow = state.flow_states.get(&user_id).map(|f| f.clone());
-
         if let Some(flow) = flow {
             match flow {
                 FlowState::AwaitingToken => {
@@ -143,19 +137,16 @@ pub(super) async fn process_master_message(
                     match teloxide::Bot::new(&token).get_me().await {
                         Ok(me) => {
                             let username = me.username().to_string();
-
                             match state.db.add_bot(user_id, &token, &username).await {
                                 Ok(bot_cfg) => {
                                     let _ = state
                                         .db
                                         .add_admin(bot_cfg.id, user_id, "Owner", false)
                                         .await;
-
                                     let mut bot_cfg_with_id = bot_cfg.clone();
                                     bot_cfg_with_id.client_tg_id = Some(user_id);
                                     state.manager.start_worker(bot_cfg_with_id).await;
-
-                                    bot.send_message(chat_id, format!("✅ Бот @{} успешно привязан!\n\nЯ запустил вашего бота. Перейдите в его личные сообщения (@{}) и отправьте /start для первоначальной настройки (выбор языка и привязка канала).", username, username)).await?;
+                                    bot.send_message(chat_id, format!("✅ Бот @{} успешно привязан!\nЯ запустил вашего бота. Перейдите в его личные сообщения (@{}) и отправьте /start для первоначальной настройки (выбор языка и привязка канала).", username, username)).await?;
                                     state.flow_states.remove(&user_id);
                                 }
                                 Err(e) => {
@@ -186,7 +177,6 @@ pub(super) async fn process_master_message(
             }
         }
     }
-
     Ok(())
 }
 
@@ -200,14 +190,12 @@ async fn handle_check_command(
     if parts.len() < 2 || parts[1].trim().is_empty() {
         bot.send_message(
             chat_id,
-            "📝 <b>Использование:</b> <code>/check &lt;username&gt;</code>\n\n\
-             <b>Пример:</b> <code>/check @mybot</code>",
+            "📝 <b>Использование:</b> <code>/check &lt;username&gt;</code>\n<b>Пример:</b> <code>/check @mybot</code>",
         )
         .parse_mode(ParseMode::Html)
         .await?;
         return Ok(());
     }
-
     let query = parts[1].trim();
     perform_bot_check(bot, chat_id, query, state).await
 }
@@ -222,11 +210,8 @@ async fn perform_bot_check(bot: &Bot, chat_id: ChatId, query: &str, state: &Arc<
         .await?;
         return Ok(());
     }
-
     let service_name = &state.config.watermark_username;
-
     let bot_cfg = state.db.find_active_bot_by_username(username).await?;
-
     match bot_cfg {
         Some(cfg) => {
             let setup_status = if cfg.setup_complete {
@@ -239,13 +224,10 @@ async fn perform_bot_check(bot: &Bot, chat_id: ChatId, query: &str, state: &Arc<
                 .as_deref()
                 .map(|u| format!("@{}", u))
                 .unwrap_or_else(|| "—".to_string());
-
             bot.send_message(
                 chat_id,
                 format!(
-                    "✅ Бот @{} обслуживается {}\n\n\
-                     📊 Статус: {}\n\
-                     📢 Канал: {}",
+                    "✅ Бот @{} обслуживается {}\n📊 Статус: {}\n📢 Канал: {}",
                     cfg.bot_username, service_name, setup_status, channel_info
                 ),
             )
@@ -261,6 +243,5 @@ async fn perform_bot_check(bot: &Bot, chat_id: ChatId, query: &str, state: &Arc<
             .await?;
         }
     }
-
     Ok(())
 }

@@ -1,14 +1,14 @@
-use anyhow::{Result, anyhow};
-use teloxide::prelude::*;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage};
-
 use super::admins;
 use super::proposals;
 use super::reports;
 use super::utils;
 use crate::bot::media;
 use crate::bot::worker::{UserStateEntry, WorkerState};
-use crate::locales::{L10n, Locale};
+use crate::l10n;
+use crate::locales::Locale;
+use anyhow::{Result, anyhow};
+use teloxide::prelude::*;
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage};
 
 type R = Result<()>;
 
@@ -28,17 +28,15 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             let mut cfg = state.config.write().await;
             cfg.lang = lang.as_str().to_string();
             drop(cfg);
-
             let code = uuid::Uuid::new_v4().simple().to_string()[..4].to_uppercase();
             state.db.set_setup_code(bot_id, &code).await?;
-
             bot.answer_callback_query(q.id.clone()).text("✅").await?;
             bot.send_message(
                 q.from.id,
                 format!(
                     "{}\n{}\n<code>/connect {}</code>",
-                    L10n::send_command_in_your_channel(lang),
-                    L10n::setup_enter_channel(lang),
+                    l10n!(lang, "send_command_in_your_channel"),
+                    l10n!(lang, "setup_enter_channel"),
                     code
                 ),
             )
@@ -52,14 +50,14 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
 
     if let Some(true) = state.db.get_admin_status(bot_id, user_id).await? {
         bot.answer_callback_query(q.id.clone())
-            .text(L10n::mod_frozen_action(lang))
+            .text(l10n!(lang, "mod_frozen_action"))
             .await?;
         return Ok(());
     }
 
     if !utils::is_authorized(state, user_id).await? {
         bot.answer_callback_query(q.id.clone())
-            .text(L10n::no_access(lang))
+            .text(l10n!(lang, "no_access"))
             .await?;
         return Ok(());
     }
@@ -80,22 +78,20 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
     {
         if user_id != state.client_tg_id {
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::only_owner_remove_admins(lang))
+                .text(l10n!(lang, "only_owner_remove_admins"))
                 .await?;
             return Ok(());
         }
-
         if let Some(code) = data.strip_prefix("revoke_invite_") {
             state.db.revoke_admin_invite(state.bot_id, code).await?;
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::invite_revoked_msg(lang))
+                .text(l10n!(lang, "invite_revoked_msg"))
                 .await?;
-            bot.edit_message_text(chat_id, message_id, L10n::invite_revoked_msg(lang))
+            bot.edit_message_text(chat_id, message_id, l10n!(lang, "invite_revoked_msg"))
                 .await
                 .ok();
             return Ok(());
         }
-
         if let Some(id_str) = data.strip_prefix("admin_manage_") {
             let target_id: i64 = id_str.parse().unwrap_or(0);
             if target_id > 0 {
@@ -111,7 +107,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             bot.answer_callback_query(q.id.clone()).await?;
             return Ok(());
         }
-
         if let Some(id_str) = data.strip_prefix("freeze_admin_") {
             let target_id: i64 = id_str.parse().unwrap_or(0);
             if target_id > 0 && target_id != state.client_tg_id {
@@ -119,7 +114,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                     .db
                     .set_admin_frozen(state.bot_id, target_id, true)
                     .await?;
-
                 let admin_name = utils::get_admin_name(state, user_id).await;
                 let _ = state
                     .db
@@ -131,7 +125,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         &target_id.to_string(),
                     )
                     .await;
-
                 let admins_list = state.db.get_admins(state.bot_id).await?;
                 if let Some(admin) = admins_list.iter().find(|a| a.user_id == target_id) {
                     let (text, kb) = admins::build_admin_manage_inline(admin, lang);
@@ -141,12 +134,11 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         .ok();
                 }
                 bot.answer_callback_query(q.id.clone())
-                    .text(L10n::admin_frozen_msg(lang))
+                    .text(l10n!(lang, "admin_frozen_msg"))
                     .await?;
             }
             return Ok(());
         }
-
         if let Some(id_str) = data.strip_prefix("unfreeze_admin_") {
             let target_id: i64 = id_str.parse().unwrap_or(0);
             if target_id > 0 {
@@ -158,7 +150,7 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         .await?;
                     if count >= 1 {
                         bot.answer_callback_query(q.id.clone())
-                            .text(L10n::limit_reached_unfreeze(lang))
+                            .text(l10n!(lang, "limit_reached_unfreeze"))
                             .await?;
                         return Ok(());
                     }
@@ -167,7 +159,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                     .db
                     .set_admin_frozen(state.bot_id, target_id, false)
                     .await?;
-
                 let admin_name = utils::get_admin_name(state, user_id).await;
                 let _ = state
                     .db
@@ -179,7 +170,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         &target_id.to_string(),
                     )
                     .await;
-
                 let admins_list = state.db.get_admins(state.bot_id).await?;
                 if let Some(admin) = admins_list.iter().find(|a| a.user_id == target_id) {
                     let (text, kb) = admins::build_admin_manage_inline(admin, lang);
@@ -189,12 +179,11 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         .ok();
                 }
                 bot.answer_callback_query(q.id.clone())
-                    .text(L10n::admin_unfrozen_msg(lang))
+                    .text(l10n!(lang, "admin_unfrozen_msg"))
                     .await?;
             }
             return Ok(());
         }
-
         if let Some(id_str) = data.strip_prefix("rmadmin_") {
             let target_id: i64 = id_str.parse().unwrap_or(0);
             if target_id > 0 {
@@ -202,15 +191,20 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                 if let Some(admin) = admins_list.iter().find(|a| a.user_id == target_id) {
                     let kb = InlineKeyboardMarkup::new(vec![
                         vec![InlineKeyboardButton::callback(
-                            L10n::confirm_yes(lang),
+                            l10n!(lang, "confirm_yes"),
                             format!("confirm_rmadmin_{}", target_id),
                         )],
                         vec![InlineKeyboardButton::callback(
-                            L10n::confirm_no(lang),
+                            l10n!(lang, "confirm_no"),
                             "cancel_rmadmin",
                         )],
                     ]);
-                    let text = L10n::confirm_remove_admin(lang, &admin.user_name, target_id);
+                    let text = l10n!(
+                        lang,
+                        "confirm_remove_admin",
+                        name = admin.user_name,
+                        id = target_id
+                    );
                     bot.edit_message_text(chat_id, message_id, text)
                         .reply_markup(kb)
                         .await
@@ -220,12 +214,10 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             bot.answer_callback_query(q.id.clone()).await?;
             return Ok(());
         }
-
         if let Some(id_str) = data.strip_prefix("confirm_rmadmin_") {
             let target_id: i64 = id_str.parse().unwrap_or(0);
             if target_id > 0 && target_id != state.client_tg_id {
                 state.db.remove_admin(state.bot_id, target_id).await?;
-
                 let admin_name = utils::get_admin_name(state, user_id).await;
                 let _ = state
                     .db
@@ -237,9 +229,8 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         &target_id.to_string(),
                     )
                     .await;
-
                 let _ = bot
-                    .send_message(ChatId(target_id), L10n::admin_removed_notification(lang))
+                    .send_message(ChatId(target_id), l10n!(lang, "admin_removed_notification"))
                     .await;
                 let (text, markup) =
                     admins::build_admins_inline(&state.db, state.bot_id, state.client_tg_id, lang)
@@ -252,7 +243,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             bot.answer_callback_query(q.id.clone()).await?;
             return Ok(());
         }
-
         if data == "cancel_rmadmin" || data == "back_to_admins" {
             let (text, markup) =
                 admins::build_admins_inline(&state.db, state.bot_id, state.client_tg_id, lang)
@@ -269,6 +259,13 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
     if let Some(id_str) = data.strip_prefix("report_dismiss_") {
         if let Ok(report_id) = id_str.parse::<i32>() {
             reports::handle_report_dismiss(bot, chat_id, report_id, q, state, lang).await?;
+        }
+        return Ok(());
+    }
+
+    if let Some(id_str) = data.strip_prefix("report_delete_") {
+        if let Ok(report_id) = id_str.parse::<i32>() {
+            reports::handle_report_delete(bot, chat_id, report_id, q, state, lang).await?;
         }
         return Ok(());
     }
@@ -294,14 +291,14 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
             match state.proposals.return_to_pending(id).await {
                 Some(_) => {
                     bot.answer_callback_query(q.id.clone())
-                        .text(L10n::returned_to_queue(lang))
+                        .text(l10n!(lang, "returned_to_queue"))
                         .await?;
                     delete_callback_message(bot, chat_id, q).await?;
                     proposals::show_next_proposal(bot, chat_id, state, lang).await?;
                 }
                 None => {
                     bot.answer_callback_query(q.id.clone())
-                        .text(L10n::proposal_gone(lang))
+                        .text(l10n!(lang, "proposal_gone"))
                         .await?;
                 }
             }
@@ -322,7 +319,6 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
         let id: u64 = id_str.parse().map_err(|_| anyhow!("Invalid callback id"))?;
         handle_ban_reason(bot, chat_id, id, q, state, lang).await?;
     }
-
     Ok(())
 }
 
@@ -338,22 +334,19 @@ async fn handle_approve(
         Some(p) => p,
         None => {
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::already_processing(lang))
+                .text(l10n!(lang, "already_processing"))
                 .await?;
             delete_callback_message(bot, chat_id, q).await?;
             return Ok(());
         }
     };
-
     let reply_to = proposal.first().parent_message_id.map(|v| v as i32);
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
     let bot_username = cfg.bot_username.clone();
     drop(cfg);
-
     let plan = state.db.get_client_plan_by_bot_id(state.bot_id).await?;
     let is_pro = plan == "pro";
-
     match media::publish(
         bot,
         channel_id,
@@ -378,23 +371,22 @@ async fn handle_approve(
                     &id.to_string(),
                 )
                 .await;
-
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::published(lang))
+                .text(l10n!(lang, "published"))
                 .await?;
             delete_callback_message(bot, chat_id, q).await?;
             proposals::show_next_proposal(bot, chat_id, state, lang).await?;
         }
         Ok(None) => {
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::published_no_id(lang))
+                .text(l10n!(lang, "published_no_id"))
                 .await?;
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to publish proposal");
             state.proposals.requeue(proposal).await;
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::failed_publish(lang))
+                .text(l10n!(lang, "failed_publish"))
                 .await?;
         }
     }
@@ -412,31 +404,36 @@ async fn handle_reject(
     match state.proposals.reject(id).await {
         Some(_) => {
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::rejected(lang))
+                .text(l10n!(lang, "rejected"))
                 .await?;
             delete_callback_message(bot, chat_id, q).await?;
-
             let kb = InlineKeyboardMarkup::new(vec![
                 vec![
-                    InlineKeyboardButton::callback(L10n::reason_btn(lang), format!("reason_{id}")),
                     InlineKeyboardButton::callback(
-                        L10n::next_btn(lang),
+                        l10n!(lang, "reason_btn"),
+                        format!("reason_{id}"),
+                    ),
+                    InlineKeyboardButton::callback(
+                        l10n!(lang, "next_btn"),
                         format!("discardnext_{id}"),
                     ),
-                    InlineKeyboardButton::callback(L10n::ban_btn(lang), format!("ban_reason_{id}")),
+                    InlineKeyboardButton::callback(
+                        l10n!(lang, "ban_btn"),
+                        format!("ban_reason_{id}"),
+                    ),
                 ],
                 vec![InlineKeyboardButton::callback(
-                    L10n::back_btn(lang),
+                    l10n!(lang, "back_btn"),
                     format!("backtopending_{id}"),
                 )],
             ]);
-            bot.send_message(chat_id, L10n::choose_action(lang))
+            bot.send_message(chat_id, l10n!(lang, "choose_action"))
                 .reply_markup(kb)
                 .await?;
         }
         None => {
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::already_processing(lang))
+                .text(l10n!(lang, "already_processing"))
                 .await?;
             delete_callback_message(bot, chat_id, q).await?;
         }
@@ -457,13 +454,12 @@ async fn handle_reason(
         Some(s) => s,
         None => {
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::proposal_gone(lang))
+                .text(l10n!(lang, "proposal_gone"))
                 .await?;
             return Ok(());
         }
     };
-
-    bot.send_message(chat_id, L10n::enter_rejection_reason(lang))
+    bot.send_message(chat_id, l10n!(lang, "enter_rejection_reason"))
         .await?;
     state.user_states.insert(
         admin_id,
@@ -474,7 +470,7 @@ async fn handle_reason(
         },
     );
     bot.answer_callback_query(q.id.clone())
-        .text(L10n::enter_reason_callback(lang))
+        .text(l10n!(lang, "enter_reason_callback"))
         .await?;
     Ok(())
 }
@@ -492,13 +488,12 @@ async fn handle_ban_reason(
         Some(s) => s,
         None => {
             bot.answer_callback_query(q.id.clone())
-                .text(L10n::proposal_gone(lang))
+                .text(l10n!(lang, "proposal_gone"))
                 .await?;
             return Ok(());
         }
     };
-
-    bot.send_message(chat_id, L10n::enter_ban_reason(lang))
+    bot.send_message(chat_id, l10n!(lang, "enter_ban_reason"))
         .await?;
     state.user_states.insert(
         admin_id,
@@ -509,7 +504,7 @@ async fn handle_ban_reason(
         },
     );
     bot.answer_callback_query(q.id.clone())
-        .text(L10n::enter_reason_callback(lang))
+        .text(l10n!(lang, "enter_reason_callback"))
         .await?;
     Ok(())
 }

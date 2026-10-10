@@ -1,12 +1,12 @@
+use crate::db::models::{Proposal, ProposalMessage};
+use crate::l10n;
+use crate::locales::Locale;
 use anyhow::Result;
 use teloxide::prelude::*;
 use teloxide::types::{
     FileId, InputFile, InputMedia, InputMediaAudio, InputMediaPhoto, InputMediaVideo,
     LinkPreviewOptions, Message as TgMessage, MessageId, ParseMode, ReplyParameters,
 };
-
-use crate::db::models::{Proposal, ProposalMessage};
-use crate::locales::{L10n, Locale};
 
 pub fn extract_media_info(msg: &TgMessage, _lang: Locale) -> (String, String) {
     if let Some(photo) = msg.photo().and_then(|p| p.last()) {
@@ -44,27 +44,35 @@ pub fn extract_message_text(msg: &TgMessage, lang: Locale) -> String {
         return String::new();
     }
     if msg.photo().map_or(false, |p| !p.is_empty()) {
-        return L10n::photo_text(lang).into();
+        return l10n!(lang, "photo_text");
     }
     if let Some(doc) = msg.document() {
-        return L10n::document_text(lang, doc.file_name.as_deref().unwrap_or("unknown"));
+        return l10n!(
+            lang,
+            "document_text",
+            name = doc.file_name.as_deref().unwrap_or("unknown")
+        );
     }
     if msg.video().is_some() {
-        return L10n::video_text(lang).into();
+        return l10n!(lang, "video_text");
     }
     if msg.video_note().is_some() {
-        return L10n::video_note_text(lang).into();
+        return l10n!(lang, "video_note_text");
     }
     if let Some(audio) = msg.audio() {
-        return L10n::audio_text(lang, audio.title.as_deref().unwrap_or("Audio"));
+        return l10n!(
+            lang,
+            "audio_text",
+            title = audio.title.as_deref().unwrap_or("Audio")
+        );
     }
     if msg.voice().is_some() {
-        return L10n::voice_text(lang).into();
+        return l10n!(lang, "voice_text");
     }
     if msg.sticker().is_some() {
-        return L10n::sticker_text(lang).into();
+        return l10n!(lang, "sticker_text");
     }
-    L10n::media_content_text(lang).into()
+    l10n!(lang, "media_content_text")
 }
 
 pub fn escape_html(s: &str) -> String {
@@ -112,7 +120,7 @@ async fn send_single_for_moderation(
     let caption = &msg.message_text;
 
     if media_type == "text" || file_id.is_empty() {
-        bot.send_message(chat_id, L10n::text_proposal(lang, caption))
+        bot.send_message(chat_id, l10n!(lang, "text_proposal", caption = caption))
             .await?;
         return Ok(());
     }
@@ -129,7 +137,12 @@ async fn send_single_for_moderation(
         _ => {
             bot.send_message(
                 chat_id,
-                L10n::media_proposal_text(lang, media_type, caption),
+                l10n!(
+                    lang,
+                    "media_proposal_text",
+                    media_type = media_type,
+                    caption = caption
+                ),
             )
             .await?
         }
@@ -146,7 +159,6 @@ async fn send_group_for_moderation(
     let all_media = messages
         .iter()
         .all(|m| matches!(m.media_type.as_str(), "photo" | "video" | "audio"));
-
     if all_media {
         let media: Vec<InputMedia> = messages
             .iter()
@@ -169,13 +181,11 @@ fn build_input_media(msg: &ProposalMessage, is_first: bool, with_html: bool) -> 
     } else {
         None
     };
-
     let mut builder = match msg.media_type.as_str() {
         "video" => InputMediaBuilder::Video(InputMediaVideo::new(file)),
         "audio" => InputMediaBuilder::Audio(InputMediaAudio::new(file)),
         _ => InputMediaBuilder::Photo(InputMediaPhoto::new(file)),
     };
-
     if let Some(cap) = caption {
         builder = builder.caption(cap);
         if with_html {
@@ -199,7 +209,6 @@ impl InputMediaBuilder {
             Self::Audio(b) => Self::Audio(b.caption(caption)),
         }
     }
-
     fn parse_mode(self, mode: ParseMode) -> Self {
         match self {
             Self::Photo(b) => Self::Photo(b.parse_mode(mode)),
@@ -207,7 +216,6 @@ impl InputMediaBuilder {
             Self::Audio(b) => Self::Audio(b.parse_mode(mode)),
         }
     }
-
     fn build(self) -> InputMedia {
         match self {
             Self::Photo(b) => InputMedia::Photo(b),
@@ -232,7 +240,7 @@ pub async fn publish(
     let quoted = format!("<blockquote>{escaped_text}</blockquote>");
     let is_reply = first.parent_message_id.is_some();
     let base = if is_reply {
-        L10n::reply_quote(lang, &quoted)
+        l10n!(lang, "reply_quote", quoted = quoted)
     } else {
         quoted
     };
@@ -241,7 +249,7 @@ pub async fn publish(
     } else {
         format!(
             "\n{}",
-            L10n::make_by(lang, watermark_username).trim_start_matches('\n')
+            l10n!(lang, "make_by", username = watermark_username).trim_start_matches('\n')
         )
     };
     let initial_caption = format!("{base}<i>{watermark}</i>");
@@ -253,15 +261,14 @@ pub async fn publish(
     };
 
     if let Some(msg_id) = channel_msg_id {
-        let reply_text = L10n::reply_link_text(lang);
-        let report_text = L10n::report_link_text(lang);
+        let reply_text = l10n!(lang, "reply_link_text");
+        let report_text = l10n!(lang, "report_link_text");
         let links = format!(
             "\n\n<a href=\"https://t.me/{bot_username}?start=reply_{msg_id}\">{reply_text}</a> | <a href=\"https://t.me/{bot_username}?start=report_{msg_id}\">{report_text}</a>"
         );
         let final_caption = format!("{initial_caption}{links}");
         let _ = add_reply_link_to_post(bot, channel_id, msg_id, &final_caption, first).await;
     }
-
     Ok(channel_msg_id)
 }
 
@@ -275,7 +282,6 @@ async fn add_reply_link_to_post(
     let chat = ChatId(channel_id);
     let media_type = msg.media_type.as_str();
     let file_id = msg.media_file_id.as_str();
-
     if media_type == "text" || file_id.is_empty() {
         bot.edit_message_text(chat, MessageId(msg_id), final_caption)
             .parse_mode(ParseMode::Html)
@@ -299,11 +305,9 @@ pub async fn add_reply_to_channel_post(
     forwarded_msg: &TgMessage,
 ) -> Result<()> {
     let chat = ChatId(channel_id);
-
     if forwarded_msg.sticker().is_some() || forwarded_msg.video_note().is_some() {
         anyhow::bail!("Cannot add reply button to sticker or video note posts");
     }
-
     if forwarded_msg.text().is_some() {
         bot.edit_message_text(chat, MessageId(msg_id), new_caption)
             .parse_mode(ParseMode::Html)
@@ -328,7 +332,6 @@ async fn publish_single(
     let chat = ChatId(channel_id);
     let media_type = msg.media_type.as_str();
     let file_id = msg.media_file_id.as_str();
-
     let sent = if media_type == "text" || file_id.is_empty() {
         let mut req = bot
             .send_message(chat, caption)
@@ -417,7 +420,6 @@ async fn publish_single(
             }
         }
     };
-
     Ok(Some(sent.id.0))
 }
 
@@ -455,7 +457,6 @@ async fn publish_group(
             }
         })
         .collect();
-
     let sent_messages = bot.send_media_group(ChatId(channel_id), media).await?;
     Ok(sent_messages.first().map(|m| m.id.0))
 }

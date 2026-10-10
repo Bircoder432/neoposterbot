@@ -1,13 +1,14 @@
-use teloxide::prelude::*;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
-
 use crate::bot::media;
+use crate::bot::worker::admins::notify_admins;
 use crate::bot::worker::utils;
 use crate::bot::worker::{UserStateEntry, WorkerState};
 use crate::db::Database;
 use crate::db::models::IncomingProposal;
 use crate::hashing::hash_user_id;
-use crate::locales::{L10n, Locale};
+use crate::l10n;
+use crate::locales::Locale;
+use teloxide::prelude::*;
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
 type R = anyhow::Result<()>;
 
@@ -15,34 +16,29 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if state
         .db
         .is_banned(state.bot_id, &hash_user_id(user_id))
         .await?
     {
-        bot.send_message(chat_id, L10n::user_banned(lang)).await?;
+        bot.send_message(chat_id, l10n!(lang, "user_banned"))
+            .await?;
         return Ok(());
     }
-
     if msg.chat.is_group() || msg.chat.is_supergroup() {
         return Ok(());
     }
-
     if !utils::has_content(msg) {
         return Ok(());
     }
-
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let mut message_text = media::extract_message_text(msg, lang);
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
-
     let mut parent_message_id = None;
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
     let channel_username = cfg.channel_username.clone();
     drop(cfg);
-
     if !message_text.is_empty() {
         if let Some(channel_msg_id) =
             parse_and_strip_tme_link(&mut message_text, channel_id, channel_username.as_deref())
@@ -50,18 +46,14 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
             parent_message_id = Some(channel_msg_id as i64);
         }
     }
-
     if media_type == "text" && message_text.trim().is_empty() {
         message_text = " ".to_string();
     }
-
     let proposal_group_id = media_group_id
         .clone()
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
-
     let notif_text = message_text.clone();
     let notif_type = media_type.clone();
-
     let inserted = state
         .proposals
         .push(IncomingProposal {
@@ -76,13 +68,12 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
             parent_message_id,
         })
         .await;
-
     if inserted {
         if parent_message_id.is_some() {
-            bot.send_message(chat_id, L10n::reply_accepted(lang))
+            bot.send_message(chat_id, l10n!(lang, "reply_accepted"))
                 .await?;
         } else {
-            bot.send_message(chat_id, L10n::proposal_accepted(lang))
+            bot.send_message(chat_id, l10n!(lang, "proposal_accepted"))
                 .await?;
         }
         notify_admins(bot, state, &notif_text, &notif_type, lang).await?;
@@ -111,10 +102,8 @@ fn parse_and_strip_tme_link(
         let path = &lower_text[pos + 5..url_end];
         let path = path.split('?').next().unwrap_or(path);
         let parts: Vec<&str> = path.split('/').collect();
-
         let mut is_match = false;
         let mut msg_id = 0;
-
         if parts.len() >= 3 && parts[0] == "c" {
             let internal_id_str = parts[1];
             let channel_id_str = channel_id.to_string();
@@ -138,7 +127,6 @@ fn parse_and_strip_tme_link(
                 }
             }
         }
-
         if is_match {
             text.replace_range(prefix_start..url_end, "");
             *text = text.trim().to_string();
@@ -157,26 +145,23 @@ pub(super) async fn handle_reply_content(
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
-
     if state
         .db
         .is_banned(state.bot_id, &hash_user_id(user_id))
         .await?
     {
-        bot.send_message(chat_id, L10n::user_banned(lang)).await?;
+        bot.send_message(chat_id, l10n!(lang, "user_banned"))
+            .await?;
         return Ok(());
     }
-
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let message_text = media::extract_message_text(msg, lang);
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
     let proposal_group_id = media_group_id
         .clone()
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
-
     let notif_text = message_text.clone();
     let notif_type = media_type.clone();
-
     let inserted = state
         .proposals
         .push(IncomingProposal {
@@ -191,10 +176,9 @@ pub(super) async fn handle_reply_content(
             parent_message_id: Some(parent_id),
         })
         .await;
-
     if inserted {
         state.user_states.remove(&user_id);
-        bot.send_message(chat_id, L10n::reply_accepted(lang))
+        bot.send_message(chat_id, l10n!(lang, "reply_accepted"))
             .await?;
         notify_admins(bot, state, &notif_text, &notif_type, lang).await?;
     }
@@ -210,7 +194,6 @@ pub(super) async fn handle_send_reason(
     let admin_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
-
     if state
         .proposals
         .take_rejected(entry.proposal_id)
@@ -218,18 +201,16 @@ pub(super) async fn handle_send_reason(
         .is_none()
     {
         state.user_states.remove(&admin_id);
-        bot.send_message(msg.chat.id, L10n::proposal_gone(lang))
+        bot.send_message(msg.chat.id, l10n!(lang, "proposal_gone"))
             .await?;
         return Ok(());
     }
-
     let _ = bot
         .send_message(
             ChatId(entry.temp_target_id),
-            L10n::rejected_reason(lang, reason),
+            l10n!(lang, "rejected_reason", reason = reason),
         )
         .await;
-
     let admin_name = utils::get_admin_name(state, admin_id).await;
     let _ = state
         .db
@@ -241,9 +222,8 @@ pub(super) async fn handle_send_reason(
             &entry.proposal_id.to_string(),
         )
         .await;
-
     state.user_states.remove(&admin_id);
-    bot.send_message(msg.chat.id, L10n::reason_sent(lang))
+    bot.send_message(msg.chat.id, l10n!(lang, "reason_sent"))
         .await?;
     Ok(())
 }
@@ -258,25 +238,22 @@ pub(super) async fn handle_send_ban_reason(
     let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
     let target_user_id = entry.temp_target_id;
-
     let proposal = match state.proposals.take_rejected(entry.proposal_id).await {
         Some(p) => p,
         None => {
             state.user_states.remove(&admin_id);
-            bot.send_message(msg.chat.id, L10n::proposal_gone(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "proposal_gone"))
                 .await?;
             return Ok(());
         }
     };
-
     let ban_id = Database::new_ban_id();
     let _ = bot
         .send_message(
             ChatId(target_user_id),
-            L10n::user_banned_appeal(lang, reason, &ban_id),
+            l10n!(lang, "user_banned_appeal", reason = reason, ban_id = ban_id),
         )
         .await;
-
     match state
         .db
         .ban_user(state.bot_id, &hash_user_id(target_user_id), reason, &ban_id)
@@ -288,33 +265,15 @@ pub(super) async fn handle_send_ban_reason(
                 .db
                 .log_action(state.bot_id, admin_id, &admin_name, "ban", &ban_id)
                 .await;
-
             state.user_states.remove(&admin_id);
-            bot.send_message(msg.chat.id, L10n::user_banned_success(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "user_banned_success"))
                 .await?;
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to ban user");
             state.proposals.restore_rejected(proposal).await;
-            bot.send_message(msg.chat.id, L10n::error_banning_user(lang))
+            bot.send_message(msg.chat.id, l10n!(lang, "error_banning_user"))
                 .await?;
-        }
-    }
-    Ok(())
-}
-
-async fn notify_admins(
-    bot: &Bot,
-    state: &WorkerState,
-    text: &str,
-    media_type: &str,
-    lang: Locale,
-) -> R {
-    let admins = state.db.get_admins(state.bot_id).await?;
-    let notification = L10n::new_proposal_notif(lang, text, media_type);
-    for admin in admins {
-        if !admin.frozen {
-            let _ = bot.send_message(ChatId(admin.user_id), &notification).await;
         }
     }
     Ok(())
@@ -328,33 +287,40 @@ pub(super) async fn show_next_proposal(
 ) -> R {
     match state.proposals.pop_next().await {
         None => {
-            bot.send_message(chat_id, L10n::no_new_proposals(lang))
+            bot.send_message(chat_id, l10n!(lang, "no_new_proposals"))
                 .await?;
         }
         Some(proposal) => {
             bot.send_message(
                 chat_id,
-                L10n::proposal_items_count(lang, proposal.messages.len()),
+                l10n!(
+                    lang,
+                    "proposal_items_count",
+                    count = proposal.messages.len()
+                ),
             )
             .await?;
             if let Err(e) = media::send_for_moderation(bot, chat_id, &proposal, lang).await {
-                bot.send_message(chat_id, L10n::failed_display_media(lang, &e.to_string()))
-                    .await?;
+                bot.send_message(
+                    chat_id,
+                    l10n!(lang, "failed_display_media", e = e.to_string()),
+                )
+                .await?;
             }
-
             let first = proposal.first();
-            let text = L10n::proposal_action_header(
+            let text = l10n!(
                 lang,
-                first.id,
-                &first.created_at.format("%d.%m.%Y %H:%M").to_string(),
+                "proposal_action_header",
+                id = first.id,
+                date = first.created_at.format("%d.%m.%Y %H:%M").to_string()
             );
             let kb = InlineKeyboardMarkup::new(vec![vec![
                 InlineKeyboardButton::callback(
-                    L10n::approve_btn(lang),
+                    l10n!(lang, "approve_btn"),
                     format!("approve_{}", first.id),
                 ),
                 InlineKeyboardButton::callback(
-                    L10n::reject_btn(lang),
+                    l10n!(lang, "reject_btn"),
                     format!("reject_{}", first.id),
                 ),
             ]]);
@@ -372,7 +338,6 @@ mod tests {
     fn test_strip_link_public_match() {
         let mut text = "Привет, посмотри https://t.me/mychan/15 вот это".to_string();
         let res = parse_and_strip_tme_link(&mut text, 0, Some("mychan"));
-
         assert_eq!(res, Some(15));
         assert_eq!(text, "Привет, посмотри  вот это");
     }
@@ -381,7 +346,6 @@ mod tests {
     fn test_strip_link_private_match() {
         let mut text = "https://t.me/c/1234567890/42".to_string();
         let res = parse_and_strip_tme_link(&mut text, -1001234567890, None);
-
         assert_eq!(res, Some(42));
         assert_eq!(text, "");
     }
@@ -390,9 +354,7 @@ mod tests {
     fn test_strip_link_no_match() {
         let mut text = "Текст без ссылок https://t.me/otherchan/10".to_string();
         let original_text = text.clone();
-
         let res = parse_and_strip_tme_link(&mut text, 0, Some("mychan"));
-
         assert_eq!(res, None);
         assert_eq!(text, original_text);
     }
@@ -401,7 +363,6 @@ mod tests {
     fn test_strip_link_case_insensitive() {
         let mut text = "Check https://t.me/MyChAn/77 out".to_string();
         let res = parse_and_strip_tme_link(&mut text, 0, Some("mychan"));
-
         assert_eq!(res, Some(77));
         assert!(!text.contains("https://"));
     }

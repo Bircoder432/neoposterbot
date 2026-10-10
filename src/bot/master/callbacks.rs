@@ -1,13 +1,12 @@
+use super::ui;
+use super::{FlowState, MasterState};
+use crate::l10n;
 use anyhow::Result;
 use std::sync::Arc;
 use teloxide::prelude::*;
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, MaybeInaccessibleMessage, ParseMode,
 };
-
-use super::ui;
-use super::{FlowState, MasterState};
-use crate::locales::L10n;
 
 type R = Result<()>;
 
@@ -53,7 +52,7 @@ pub(super) async fn process_master_callback(
             let markup = InlineKeyboardMarkup::new(keyboard);
             bot.send_message(
                 chat_id,
-                "🤖 <b>Ваши активные боты:</b>\n\nНажмите на кнопку, чтобы отвязать бота.",
+                "🤖 <b>Ваши активные боты:</b>\nНажмите на кнопку, чтобы отвязать бота.",
             )
             .parse_mode(ParseMode::Html)
             .reply_markup(markup)
@@ -69,9 +68,7 @@ pub(super) async fn process_master_callback(
             .insert(user_id, FlowState::AwaitingBotCheck);
         bot.send_message(
             chat_id,
-            "🔍 <b>Проверка бота</b>\n\n\
-             Отправьте юзернейм бота (например, <code>@mybot</code>) для проверки.\n\n\
-             /cancel — отмена.",
+            "🔍 <b>Проверка бота</b>\nОтправьте юзернейм бота (например, <code>@mybot</code>) для проверки.\n/cancel — отмена.",
         )
         .parse_mode(ParseMode::Html)
         .await?;
@@ -85,11 +82,9 @@ pub(super) async fn process_master_callback(
             if bots.iter().any(|b| b.id == bot_id) {
                 let _ = state.db.deactivate_bot(bot_id).await;
                 state.manager.stop_worker(bot_id).await;
-
                 bot.answer_callback_query(q.id.clone())
                     .text("✅ Бот отвязан и остановлен.")
                     .await?;
-
                 if let Some(MaybeInaccessibleMessage::Regular(msg)) = &q.message {
                     bot.delete_message(msg.chat.id, msg.id).await.ok();
                 }
@@ -113,14 +108,12 @@ pub(super) async fn process_master_callback(
         let is_pro = client
             .pro_expires_at
             .map_or(false, |d| d > chrono::Utc::now());
-
         if is_pro {
             bot.answer_callback_query(q.id.clone())
                 .text("✅ У вас уже активна Pro-подписка!")
                 .await?;
             return Ok(());
         }
-
         bot.send_invoice(
             chat_id,
             "Pro подписка (30 дней)",
@@ -130,7 +123,6 @@ pub(super) async fn process_master_callback(
             vec![LabeledPrice::new("Pro Plan", 100)],
         )
         .await?;
-
         bot.answer_callback_query(q.id.clone()).await?;
         return Ok(());
     }
@@ -173,7 +165,7 @@ pub(super) async fn process_master_callback(
                         state.manager.start_worker(b).await;
                     }
                     bot.answer_callback_query(q.id.clone())
-                        .text(L10n::client_unbanned_msg(lang))
+                        .text(l10n!(lang, "client_unbanned_msg"))
                         .await?;
                 } else {
                     let bot_ids = state.db.ban_client(tg_id).await?;
@@ -181,7 +173,7 @@ pub(super) async fn process_master_callback(
                         state.manager.stop_worker(bid).await;
                     }
                     bot.answer_callback_query(q.id.clone())
-                        .text(L10n::client_banned_msg(lang))
+                        .text(l10n!(lang, "client_banned_msg"))
                         .await?;
                 }
                 ui::send_client_details(bot, chat_id, message_id, state, tg_id, lang).await?;
@@ -195,12 +187,12 @@ pub(super) async fn process_master_callback(
             match state.db.toggle_client_plan(tg_id).await?.as_str() {
                 "pro" => {
                     bot.answer_callback_query(q.id.clone())
-                        .text(L10n::plan_changed_pro_msg(lang))
+                        .text(l10n!(lang, "plan_changed_pro_msg"))
                         .await?;
                 }
                 _ => {
                     bot.answer_callback_query(q.id.clone())
-                        .text(L10n::plan_changed_free_msg(lang))
+                        .text(l10n!(lang, "plan_changed_free_msg"))
                         .await?;
                 }
             }
