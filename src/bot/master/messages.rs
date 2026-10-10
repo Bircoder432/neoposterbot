@@ -41,12 +41,23 @@ pub(super) async fn process_master_message(
 
     if user_id == state.config.owner_id {
         let lang = super::get_locale(state, user_id).await;
+
         if text.starts_with("/help") {
             bot.send_message(chat_id, l10n!(lang, "master_help"))
                 .await?;
             return Ok(());
         } else if text.starts_with("/clients") {
             ui::send_clients_page(bot, chat_id, state, 0, lang).await?;
+            return Ok(());
+        } else if text.starts_with("/bots") {
+            ui::send_bots_page(bot, chat_id, None, state, 0, lang).await?;
+            return Ok(());
+        } else if text.starts_with("/broadcast") {
+            state
+                .flow_states
+                .insert(user_id, FlowState::AwaitingBroadcast);
+            bot.send_message(chat_id, l10n!(lang, "broadcast_prompt"))
+                .await?;
             return Ok(());
         } else if text.starts_with("/stats") {
             let clients = state.db.get_all_clients().await?;
@@ -174,6 +185,38 @@ pub(super) async fn process_master_message(
                     perform_bot_check(bot, chat_id, query, state).await?;
                     state.flow_states.remove(&user_id);
                 }
+                FlowState::AwaitingBroadcast => {
+                    if user_id == state.config.owner_id {
+                        let lang = super::get_locale(state, user_id).await;
+                        let clients = state.db.get_clients_with_bots().await?;
+                        if clients.is_empty() {
+                            bot.send_message(chat_id, l10n!(lang, "broadcast_no_clients"))
+                                .await?;
+                            state.flow_states.remove(&user_id);
+                            return Ok(());
+                        }
+                        bot.send_message(chat_id, l10n!(lang, "broadcast_started"))
+                            .await?;
+                        let broadcast_text = text.to_string();
+                        let mut sent = 0u64;
+                        let mut failed = 0u64;
+                        for client in &clients {
+                            match bot
+                                .send_message(ChatId(client.tg_user_id), &broadcast_text)
+                                .await
+                            {
+                                Ok(_) => sent += 1,
+                                Err(_) => failed += 1,
+                            }
+                        }
+                        state.flow_states.remove(&user_id);
+                        bot.send_message(
+                            chat_id,
+                            l10n!(lang, "broadcast_finished", sent = sent, failed = failed),
+                        )
+                        .await?;
+                    }
+                }
             }
         }
     }
@@ -188,12 +231,8 @@ async fn handle_check_command(
 ) -> R {
     let parts: Vec<&str> = text.splitn(2, char::is_whitespace).collect();
     if parts.len() < 2 || parts[1].trim().is_empty() {
-        bot.send_message(
-            chat_id,
-            "📝 <b>Использование:</b> <code>/check &lt;username&gt;</code>\n<b>Пример:</b> <code>/check @mybot</code>",
-        )
-        .parse_mode(ParseMode::Html)
-        .await?;
+        bot.send_message(chat_id, "📝 <b>Использование:</b> <code>/check &lt;username&gt;</code>\n<b>Пример:</b> <code>/check @mybot</code>")
+            .parse_mode(ParseMode::Html).await?;
         return Ok(());
     }
     let query = parts[1].trim();

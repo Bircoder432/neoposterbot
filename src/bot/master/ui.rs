@@ -7,7 +7,7 @@ use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MessageId, ParseMode};
 
 const CLIENTS_PER_PAGE: i64 = 5;
-const BOTS_PER_PAGE: i64 = 5;
+const BOTS_PER_PAGE: i64 = 10;
 
 type R = Result<()>;
 
@@ -31,6 +31,7 @@ pub(super) async fn send_clients_page(
         .db
         .get_clients_paginated(offset, CLIENTS_PER_PAGE)
         .await?;
+
     let mut keyboard: Vec<Vec<InlineKeyboardButton>> = vec![];
     for c in &clients {
         let plan_str = if c.pro_expires_at.map_or(false, |d| d > chrono::Utc::now()) {
@@ -47,6 +48,7 @@ pub(super) async fn send_clients_page(
             format!("client_{}", c.tg_user_id),
         )]);
     }
+
     let mut nav_row = vec![];
     if current_page > 0 {
         nav_row.push(InlineKeyboardButton::callback(
@@ -63,10 +65,88 @@ pub(super) async fn send_clients_page(
     if !nav_row.is_empty() {
         keyboard.push(nav_row);
     }
+
     let markup = InlineKeyboardMarkup::new(keyboard);
     bot.send_message(chat_id, l10n!(lang, "clients_list_title"))
         .reply_markup(markup)
         .await?;
+    Ok(())
+}
+
+pub(super) async fn send_bots_page(
+    bot: &Bot,
+    chat_id: ChatId,
+    message_id: Option<MessageId>,
+    state: &Arc<MasterState>,
+    page: i64,
+    lang: Locale,
+) -> R {
+    let all_bots = state.db.get_all_bots_with_clients().await?;
+    if all_bots.is_empty() {
+        let text = l10n!(lang, "bots_list_empty");
+        if let Some(mid) = message_id {
+            bot.edit_message_text(chat_id, mid, text).await.ok();
+        } else {
+            bot.send_message(chat_id, text).await?;
+        }
+        return Ok(());
+    }
+
+    let total = all_bots.len() as i64;
+    let total_pages = (total + BOTS_PER_PAGE - 1) / BOTS_PER_PAGE;
+    let current_page = page.max(0).min(total_pages - 1);
+    let start = (current_page * BOTS_PER_PAGE) as usize;
+    let end = (start + BOTS_PER_PAGE as usize).min(total as usize);
+
+    let mut text = l10n!(lang, "bots_list_title");
+    for (i, b) in all_bots[start..end].iter().enumerate() {
+        let status = if b.active {
+            l10n!(lang, "bot_status_active_text")
+        } else {
+            l10n!(lang, "bot_status_inactive_text")
+        };
+        text.push_str(&l10n!(
+            lang,
+            "bots_list_entry",
+            i = start + i + 1,
+            username = b.bot_username,
+            bot_id = b.id,
+            client_id = b.client_tg_id.unwrap_or(0),
+            status = status
+        ));
+    }
+
+    let mut keyboard = vec![];
+    let mut nav_row = vec![];
+    if current_page > 0 {
+        nav_row.push(InlineKeyboardButton::callback(
+            "⬅️",
+            format!("bots_page_{}", current_page - 1),
+        ));
+    }
+    if current_page < total_pages - 1 {
+        nav_row.push(InlineKeyboardButton::callback(
+            "➡️",
+            format!("bots_page_{}", current_page + 1),
+        ));
+    }
+    if !nav_row.is_empty() {
+        keyboard.push(nav_row);
+    }
+
+    let markup = InlineKeyboardMarkup::new(keyboard);
+    if let Some(mid) = message_id {
+        bot.edit_message_text(chat_id, mid, text)
+            .parse_mode(ParseMode::Html)
+            .reply_markup(markup)
+            .await
+            .ok();
+    } else {
+        bot.send_message(chat_id, text)
+            .parse_mode(ParseMode::Html)
+            .reply_markup(markup)
+            .await?;
+    }
     Ok(())
 }
 
@@ -78,12 +158,9 @@ pub(super) async fn send_client_details(
     tg_id: i64,
     lang: Locale,
 ) -> R {
-    let client = state.db.get_client_by_tg_id(tg_id).await?;
-    let client = match client {
+    let client = match state.db.get_client_by_tg_id(tg_id).await? {
         Some(c) => c,
-        None => {
-            return Ok(());
-        }
+        None => return Ok(()),
     };
     let bots = state.db.get_all_bots_by_client_tg_id(tg_id).await?;
     let is_pro = client
@@ -102,6 +179,7 @@ pub(super) async fn send_client_details(
     } else {
         l10n!(lang, "client_plan_free")
     };
+
     let status = if client.banned {
         l10n!(lang, "client_status_banned")
     } else {
@@ -147,7 +225,7 @@ pub(super) async fn send_client_details(
         )],
         vec![InlineKeyboardButton::callback(
             l10n!(lang, "back_btn"),
-            format!("clients_page_0"),
+            "clients_page_0",
         )],
     ];
     let markup = InlineKeyboardMarkup::new(keyboard);
@@ -180,12 +258,14 @@ pub(super) async fn send_client_bots(
             .ok();
         return Ok(());
     }
+
     let total_bots = all_bots.len() as i64;
     let total_pages = (total_bots + BOTS_PER_PAGE - 1) / BOTS_PER_PAGE;
     let current_page = page.max(0).min(total_pages - 1);
     let start = (current_page * BOTS_PER_PAGE) as usize;
     let end = (start + BOTS_PER_PAGE as usize).min(total_bots as usize);
     let bots_to_show = &all_bots[start..end];
+
     let mut keyboard: Vec<Vec<InlineKeyboardButton>> = vec![];
     for b in bots_to_show {
         let status = if b.active { "✅" } else { "❌" };
@@ -194,6 +274,7 @@ pub(super) async fn send_client_bots(
             format!("botinfo_{}", b.id),
         )]);
     }
+
     let mut nav_row = vec![];
     if current_page > 0 {
         nav_row.push(InlineKeyboardButton::callback(
@@ -214,6 +295,7 @@ pub(super) async fn send_client_bots(
         l10n!(lang, "back_btn"),
         format!("client_{}", tg_id),
     )]);
+
     let markup = InlineKeyboardMarkup::new(keyboard);
     bot.edit_message_text(chat_id, message_id, l10n!(lang, "client_bots_title"))
         .reply_markup(markup)
@@ -233,10 +315,8 @@ pub(super) async fn send_bot_info(
     let pool = &state.db.pool;
     let bot_cfg: Option<crate::db::models::BotConfig> = sqlx::query_as(
         "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.id = $1"
-    )
-    .bind(bot_id)
-    .fetch_optional(pool)
-    .await?;
+    ).bind(bot_id).fetch_optional(pool).await?;
+
     if let Some(b) = bot_cfg {
         let channel_display = b.channel_username.clone().unwrap_or_else(|| {
             if b.channel_id != 0 {
@@ -251,6 +331,7 @@ pub(super) async fn send_bot_info(
         } else {
             l10n!(lang, "bot_status_inactive")
         };
+
         let text = l10n!(
             lang,
             "bot_info",

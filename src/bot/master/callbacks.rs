@@ -66,12 +66,8 @@ pub(super) async fn process_master_callback(
         state
             .flow_states
             .insert(user_id, FlowState::AwaitingBotCheck);
-        bot.send_message(
-            chat_id,
-            "🔍 <b>Проверка бота</b>\nОтправьте юзернейм бота (например, <code>@mybot</code>) для проверки.\n/cancel — отмена.",
-        )
-        .parse_mode(ParseMode::Html)
-        .await?;
+        bot.send_message(chat_id, "🔍 <b>Проверка бота</b>\nОтправьте юзернейм бота (например, <code>@mybot</code>) для проверки.\n/cancel — отмена.")
+            .parse_mode(ParseMode::Html).await?;
         bot.answer_callback_query(q.id.clone()).await?;
         return Ok(());
     }
@@ -143,6 +139,13 @@ pub(super) async fn process_master_callback(
     if let Some(page_str) = data.strip_prefix("clients_page_") {
         let page: i64 = page_str.parse().unwrap_or(0);
         ui::send_clients_page(bot, chat_id, state, page, lang).await?;
+        bot.answer_callback_query(q.id.clone()).await?;
+        return Ok(());
+    }
+
+    if let Some(page_str) = data.strip_prefix("bots_page_") {
+        let page: i64 = page_str.parse().unwrap_or(0);
+        ui::send_bots_page(bot, chat_id, Some(message_id), state, page, lang).await?;
         bot.answer_callback_query(q.id.clone()).await?;
         return Ok(());
     }

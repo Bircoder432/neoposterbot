@@ -625,4 +625,16 @@ impl Database {
         .fetch_all(&self.pool)
         .await?)
     }
+
+    pub async fn get_clients_with_bots(&self) -> Result<Vec<Client>> {
+        Ok(sqlx::query_as(
+            "SELECT DISTINCT c.* FROM clients c JOIN bots b ON c.id = b.client_id WHERE b.active = TRUE AND c.banned = FALSE"
+        ).fetch_all(&self.pool).await?)
+    }
+
+    pub async fn get_all_bots_with_clients(&self) -> Result<Vec<BotConfig>> {
+        Ok(sqlx::query_as(
+            "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id ORDER BY b.id DESC"
+        ).fetch_all(&self.pool).await?)
+    }
 }

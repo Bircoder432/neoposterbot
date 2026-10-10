@@ -1,12 +1,11 @@
-use anyhow::Result;
-use dashmap::DashMap;
-use std::sync::Arc;
-use teloxide::prelude::*;
-
 use crate::bot::manager::BotManager;
 use crate::config::Config;
 use crate::db::repository::Database;
 use crate::locales::Locale;
+use anyhow::Result;
+use dashmap::DashMap;
+use std::sync::Arc;
+use teloxide::prelude::*;
 
 mod callbacks;
 mod messages;
@@ -23,11 +22,11 @@ pub struct MasterState {
 pub enum FlowState {
     AwaitingToken,
     AwaitingBotCheck,
+    AwaitingBroadcast,
 }
 
 pub async fn run_master_bot(state: Arc<MasterState>) -> Result<()> {
     let bot = Bot::new(&state.config.master_bot_token);
-
     let handler = dptree::entry()
         .branch(Update::filter_message().endpoint(handle_master_message))
         .branch(Update::filter_callback_query().endpoint(handle_master_callback))
