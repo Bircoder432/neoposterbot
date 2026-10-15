@@ -102,3 +102,10 @@ pub struct AuditLog {
     pub target: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, FromRow)]
+pub struct BannedUsername {
+    pub id: i32,
+    pub bot_id: i32,
+    pub username: String,
+}

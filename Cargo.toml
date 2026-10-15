@@ -20,6 +20,7 @@ sha2 = "0.10"
 serde = "1.0.229"
 ron = "0.12.2"
 toml = "1.1.8"
+regex = "1.13.1"
 
 [dev-dependencies]
 tempfile = "3"

@@ -21,6 +21,7 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
         .trim_start_matches('/')
         .to_lowercase();
     let args = parts.next().unwrap_or("").trim();
+
     match cmd.as_str() {
         "start" => handle_start(bot, msg, state, args).await,
         "proposals" => handle_proposals(bot, msg, state).await,
@@ -34,6 +35,8 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
         "audit" => handle_audit(bot, msg, state).await,
         "lang" => handle_set_language(bot, msg, state, args).await,
         "cancel" => handle_cancel(bot, msg, state).await,
+        "nopostme" => handle_nopostme(bot, msg, state).await,
+        "allowpostme" => handle_allowpostme(bot, msg, state).await,
         _ => Ok(()),
     }
 }
@@ -80,9 +83,11 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
+
     if let Some(code) = args.strip_prefix("admin_") {
         return admins::handle_admin_invite(bot, chat_id, user_id, code, state, lang).await;
     }
+
     if state
         .db
         .is_banned(state.bot_id, &hash_user_id(user_id))
@@ -92,6 +97,7 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
             .await?;
         return Ok(());
     }
+
     if let Some(parent_id_str) = args.strip_prefix("reply_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
@@ -112,6 +118,7 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
             .await?;
         return Ok(());
     }
+
     if let Some(parent_id_str) = args.strip_prefix("report_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
@@ -132,6 +139,7 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
             .await?;
         return Ok(());
     }
+
     if state.client_tg_id == user_id {
         bot.send_message(chat_id, l10n!(lang, "owner_panel"))
             .await?;
@@ -446,6 +454,55 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
             )
             .await?;
         }
+    }
+    Ok(())
+}
+
+async fn handle_nopostme(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
+    let lang = state.db.get_language(state.bot_id).await?;
+    let username = match msg.from.as_ref().and_then(|u| u.username.clone()) {
+        Some(u) => u,
+        None => {
+            bot.send_message(msg.chat.id, l10n!(lang, "nopostme_no_username"))
+                .await?;
+            return Ok(());
+        }
+    };
+    state
+        .db
+        .add_banned_username(state.bot_id, &username)
+        .await?;
+    bot.send_message(
+        msg.chat.id,
+        l10n!(lang, "nopostme_success", username = username),
+    )
+    .await?;
+    Ok(())
+}
+
+async fn handle_allowpostme(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
+    let lang = state.db.get_language(state.bot_id).await?;
+    let username = match msg.from.as_ref().and_then(|u| u.username.clone()) {
+        Some(u) => u,
+        None => {
+            bot.send_message(msg.chat.id, l10n!(lang, "allowpostme_no_username"))
+                .await?;
+            return Ok(());
+        }
+    };
+    let removed = state
+        .db
+        .remove_banned_username(state.bot_id, &username)
+        .await?;
+    if removed {
+        bot.send_message(
+            msg.chat.id,
+            l10n!(lang, "allowpostme_success", username = username),
+        )
+        .await?;
+    } else {
+        bot.send_message(msg.chat.id, l10n!(lang, "allowpostme_not_found"))
+            .await?;
     }
     Ok(())
 }

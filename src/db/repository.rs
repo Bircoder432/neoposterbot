@@ -83,8 +83,8 @@ impl Database {
     pub async fn ensure_client(&self, tg_user_id: i64) -> Result<Client> {
         let client: Client = sqlx::query_as(
             "INSERT INTO clients (tg_user_id) VALUES ($1)
-             ON CONFLICT (tg_user_id) DO UPDATE SET banned = FALSE
-             RETURNING *",
+            ON CONFLICT (tg_user_id) DO UPDATE SET banned = FALSE
+            RETURNING *",
         )
         .bind(tg_user_id)
         .fetch_one(&self.pool)
@@ -101,9 +101,9 @@ impl Database {
     pub async fn get_stats(&self) -> Result<(i64, i64)> {
         let row: (i64, i64) = sqlx::query_as(
             "SELECT
-                COUNT(*) FILTER (WHERE pro_expires_at > NOW()) as pro_count,
-                COUNT(*) FILTER (WHERE pro_expires_at IS NULL OR pro_expires_at <= NOW()) as free_count
-             FROM clients WHERE banned = FALSE",
+            COUNT(*) FILTER (WHERE pro_expires_at > NOW()) as pro_count,
+            COUNT(*) FILTER (WHERE pro_expires_at IS NULL OR pro_expires_at <= NOW()) as free_count
+            FROM clients WHERE banned = FALSE",
         )
         .fetch_one(&self.pool)
         .await?;
@@ -169,9 +169,9 @@ impl Database {
             .await?;
         let bots: Vec<BotConfig> = sqlx::query_as(
             "UPDATE bots SET active = TRUE \
-             WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1) \
-             AND setup_complete = TRUE \
-             RETURNING *, NULL as client_tg_id",
+            WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1) \
+            AND setup_complete = TRUE \
+            RETURNING *, NULL as client_tg_id",
         )
         .bind(tg_user_id)
         .fetch_all(&self.pool)
@@ -189,7 +189,7 @@ impl Database {
     pub async fn get_client_plan_by_bot_id(&self, bot_id: i32) -> Result<String> {
         let row: Option<(String,)> = sqlx::query_as(
             "SELECT CASE WHEN c.pro_expires_at > NOW() THEN 'pro' ELSE 'free' END as plan
-             FROM clients c JOIN bots b ON c.id = b.client_id WHERE b.id = $1",
+            FROM clients c JOIN bots b ON c.id = b.client_id WHERE b.id = $1",
         )
         .bind(bot_id)
         .fetch_optional(&self.pool)
@@ -216,8 +216,8 @@ impl Database {
         let username = username.trim_start_matches('@');
         Ok(sqlx::query_as(
             "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b \
-             JOIN clients c ON b.client_id = c.id \
-             WHERE LOWER(b.bot_username) = LOWER($1) AND b.active = TRUE",
+            JOIN clients c ON b.client_id = c.id \
+            WHERE LOWER(b.bot_username) = LOWER($1) AND b.active = TRUE",
         )
         .bind(username)
         .fetch_optional(&self.pool)
@@ -237,7 +237,6 @@ impl Database {
             "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id WHERE b.token = $1"
         )
         .bind(token).fetch_optional(&self.pool).await?;
-
         if let Some(bot) = existing {
             if bot.client_tg_id != Some(tg_user_id) {
                 anyhow::bail!("Этот токен уже привязан к другому аккаунту.");
@@ -252,8 +251,8 @@ impl Database {
         } else {
             let bot: BotConfig = sqlx::query_as(
                 "INSERT INTO bots (client_id, token, bot_username, channel_id)
-                 VALUES ((SELECT id FROM clients WHERE tg_user_id = $1), $2, $3, 0)
-                 RETURNING *, NULL as client_tg_id",
+                VALUES ((SELECT id FROM clients WHERE tg_user_id = $1), $2, $3, 0)
+                RETURNING *, NULL as client_tg_id",
             )
             .bind(tg_user_id)
             .bind(token)
@@ -328,12 +327,12 @@ impl Database {
         let now = Utc::now();
         sqlx::query(
             "INSERT INTO bans (bot_id, ban_id, user_hash, reason, created_at, active)
-             VALUES ($1, $2, $3, $4, $5, TRUE)
-             ON CONFLICT (bot_id, user_hash) DO UPDATE
-             SET ban_id = EXCLUDED.ban_id,
-                 reason = EXCLUDED.reason,
-                 created_at = EXCLUDED.created_at,
-                 active = TRUE",
+            VALUES ($1, $2, $3, $4, $5, TRUE)
+            ON CONFLICT (bot_id, user_hash) DO UPDATE
+            SET ban_id = EXCLUDED.ban_id,
+            reason = EXCLUDED.reason,
+            created_at = EXCLUDED.created_at,
+            active = TRUE",
         )
         .bind(bot_id)
         .bind(ban_id)
@@ -359,8 +358,8 @@ impl Database {
     pub async fn pardon_by_ban_id(&self, bot_id: i32, ban_id: &str) -> Result<Option<BanRecord>> {
         Ok(sqlx::query_as(
             "UPDATE bans SET active = FALSE
-             WHERE bot_id = $1 AND ban_id = $2 AND active = TRUE
-             RETURNING ban_id, user_hash, reason, created_at",
+            WHERE bot_id = $1 AND ban_id = $2 AND active = TRUE
+            RETURNING ban_id, user_hash, reason, created_at",
         )
         .bind(bot_id)
         .bind(ban_id)
@@ -371,7 +370,7 @@ impl Database {
     pub async fn get_active_ban_records(&self, bot_id: i32) -> Result<Vec<BanRecord>> {
         Ok(sqlx::query_as(
             "SELECT ban_id, user_hash, reason, created_at FROM bans
-             WHERE bot_id = $1 AND active = TRUE ORDER BY created_at DESC",
+            WHERE bot_id = $1 AND active = TRUE ORDER BY created_at DESC",
         )
         .bind(bot_id)
         .fetch_all(&self.pool)
@@ -439,7 +438,7 @@ impl Database {
     pub async fn use_admin_invite(&self, bot_id: i32, code: &str) -> Result<bool> {
         let row: Option<(i32,)> = sqlx::query_as(
             "SELECT 1 FROM admin_invites \
-             WHERE bot_id = $1 AND code = $2 AND used = FALSE AND expires_at > NOW()",
+            WHERE bot_id = $1 AND code = $2 AND used = FALSE AND expires_at > NOW()",
         )
         .bind(bot_id)
         .bind(code)
@@ -511,15 +510,15 @@ impl Database {
     pub async fn enforce_free_plan_limit(&self, bot_id: i32, owner_id: i64) -> Result<()> {
         sqlx::query(
             "UPDATE admins SET frozen = TRUE
-             WHERE bot_id = $1
-             AND user_id != $2
-             AND id NOT IN (
-                 SELECT id FROM admins
-                 WHERE bot_id = $1
-                 AND user_id != $2
-                 ORDER BY id ASC
-                 LIMIT 1
-             )",
+            WHERE bot_id = $1
+            AND user_id != $2
+            AND id NOT IN (
+                SELECT id FROM admins
+                WHERE bot_id = $1
+                AND user_id != $2
+                ORDER BY id ASC
+                LIMIT 1
+            )",
         )
         .bind(bot_id)
         .bind(owner_id)
@@ -537,7 +536,7 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO reports (bot_id, channel_msg_id, reporter_hash, reason)
-             VALUES ($1, $2, $3, $4)",
+            VALUES ($1, $2, $3, $4)",
         )
         .bind(bot_id)
         .bind(channel_msg_id)
@@ -604,7 +603,7 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO audit_logs (bot_id, admin_id, admin_name, action, target)
-             VALUES ($1, $2, $3, $4, $5)",
+            VALUES ($1, $2, $3, $4, $5)",
         )
         .bind(bot_id)
         .bind(admin_id)
@@ -636,5 +635,36 @@ impl Database {
         Ok(sqlx::query_as(
             "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b JOIN clients c ON b.client_id = c.id ORDER BY b.id DESC"
         ).fetch_all(&self.pool).await?)
+    }
+
+    pub async fn add_banned_username(&self, bot_id: i32, username: &str) -> Result<()> {
+        let lower = username.to_lowercase();
+        sqlx::query(
+            "INSERT INTO banned_usernames (bot_id, username) VALUES ($1, $2) ON CONFLICT DO NOTHING"
+        )
+        .bind(bot_id)
+        .bind(&lower)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn remove_banned_username(&self, bot_id: i32, username: &str) -> Result<bool> {
+        let lower = username.to_lowercase();
+        let res = sqlx::query("DELETE FROM banned_usernames WHERE bot_id = $1 AND username = $2")
+            .bind(bot_id)
+            .bind(&lower)
+            .execute(&self.pool)
+            .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    pub async fn get_banned_usernames(&self, bot_id: i32) -> Result<Vec<String>> {
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT username FROM banned_usernames WHERE bot_id = $1")
+                .bind(bot_id)
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows.into_iter().map(|(u,)| u).collect())
     }
 }

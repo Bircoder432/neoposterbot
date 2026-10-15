@@ -7,15 +7,34 @@ use crate::db::models::IncomingProposal;
 use crate::hashing::hash_user_id;
 use crate::l10n;
 use crate::locales::Locale;
+use regex::Regex;
 use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
 type R = anyhow::Result<()>;
 
+fn contains_banned_username(text: &str, banned_usernames: &[String]) -> bool {
+    let lower_text = text.to_lowercase();
+    for uname in banned_usernames {
+        let escaped = regex::escape(uname);
+        let pattern = format!(
+            r"(?i)(^|[^a-zA-Z0-9_])(?:@|t\.me/)?{}([^a-zA-Z0-9_]|$)",
+            escaped
+        );
+        if let Ok(re) = Regex::new(&pattern) {
+            if re.is_match(&lower_text) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
+
     if state
         .db
         .is_banned(state.bot_id, &hash_user_id(user_id))
@@ -25,20 +44,25 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
             .await?;
         return Ok(());
     }
+
     if msg.chat.is_group() || msg.chat.is_supergroup() {
         return Ok(());
     }
+
     if !utils::has_content(msg) {
         return Ok(());
     }
+
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let mut message_text = media::extract_message_text(msg, lang);
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
     let mut parent_message_id = None;
+
     let cfg = state.config.read().await;
     let channel_id = cfg.channel_id;
     let channel_username = cfg.channel_username.clone();
     drop(cfg);
+
     if !message_text.is_empty() {
         if let Some(channel_msg_id) =
             parse_and_strip_tme_link(&mut message_text, channel_id, channel_username.as_deref())
@@ -46,14 +70,27 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
             parent_message_id = Some(channel_msg_id as i64);
         }
     }
+
     if media_type == "text" && message_text.trim().is_empty() {
         message_text = " ".to_string();
     }
+
+    let banned = match state.db.get_banned_usernames(state.bot_id).await {
+        Ok(b) => b,
+        Err(_) => Vec::new(),
+    };
+    if contains_banned_username(&message_text, &banned) {
+        bot.send_message(chat_id, l10n!(lang, "auto_reject_forbidden_username"))
+            .await?;
+        return Ok(());
+    }
+
     let proposal_group_id = media_group_id
         .clone()
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
     let notif_text = message_text.clone();
     let notif_type = media_type.clone();
+
     let inserted = state
         .proposals
         .push(IncomingProposal {
@@ -68,6 +105,7 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
             parent_message_id,
         })
         .await;
+
     if inserted {
         if parent_message_id.is_some() {
             bot.send_message(chat_id, l10n!(lang, "reply_accepted"))
@@ -145,6 +183,7 @@ pub(super) async fn handle_reply_content(
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let chat_id = msg.chat.id;
     let lang = state.db.get_language(state.bot_id).await?;
+
     if state
         .db
         .is_banned(state.bot_id, &hash_user_id(user_id))
@@ -154,14 +193,27 @@ pub(super) async fn handle_reply_content(
             .await?;
         return Ok(());
     }
+
     let (media_type, media_file_id) = media::extract_media_info(msg, lang);
     let message_text = media::extract_message_text(msg, lang);
     let media_group_id = msg.media_group_id().map(|s| s.to_string());
+
+    let banned = match state.db.get_banned_usernames(state.bot_id).await {
+        Ok(b) => b,
+        Err(_) => Vec::new(),
+    };
+    if contains_banned_username(&message_text, &banned) {
+        bot.send_message(chat_id, l10n!(lang, "auto_reject_forbidden_username"))
+            .await?;
+        return Ok(());
+    }
+
     let proposal_group_id = media_group_id
         .clone()
         .unwrap_or_else(|| format!("single_{}", uuid::Uuid::new_v4()));
     let notif_text = message_text.clone();
     let notif_type = media_type.clone();
+
     let inserted = state
         .proposals
         .push(IncomingProposal {
@@ -176,6 +228,7 @@ pub(super) async fn handle_reply_content(
             parent_message_id: Some(parent_id),
         })
         .await;
+
     if inserted {
         state.user_states.remove(&user_id);
         bot.send_message(chat_id, l10n!(lang, "reply_accepted"))
@@ -194,6 +247,7 @@ pub(super) async fn handle_send_reason(
     let admin_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
+
     if state
         .proposals
         .take_rejected(entry.proposal_id)
@@ -205,12 +259,14 @@ pub(super) async fn handle_send_reason(
             .await?;
         return Ok(());
     }
+
     let _ = bot
         .send_message(
             ChatId(entry.temp_target_id),
             l10n!(lang, "rejected_reason", reason = reason),
         )
         .await;
+
     let admin_name = utils::get_admin_name(state, admin_id).await;
     let _ = state
         .db
@@ -222,6 +278,7 @@ pub(super) async fn handle_send_reason(
             &entry.proposal_id.to_string(),
         )
         .await;
+
     state.user_states.remove(&admin_id);
     bot.send_message(msg.chat.id, l10n!(lang, "reason_sent"))
         .await?;
@@ -238,6 +295,7 @@ pub(super) async fn handle_send_ban_reason(
     let lang = state.db.get_language(state.bot_id).await?;
     let reason = msg.text().unwrap_or("No reason provided");
     let target_user_id = entry.temp_target_id;
+
     let proposal = match state.proposals.take_rejected(entry.proposal_id).await {
         Some(p) => p,
         None => {
@@ -247,6 +305,7 @@ pub(super) async fn handle_send_ban_reason(
             return Ok(());
         }
     };
+
     let ban_id = Database::new_ban_id();
     let _ = bot
         .send_message(
@@ -254,6 +313,7 @@ pub(super) async fn handle_send_ban_reason(
             l10n!(lang, "user_banned_appeal", reason = reason, ban_id = ban_id),
         )
         .await;
+
     match state
         .db
         .ban_user(state.bot_id, &hash_user_id(target_user_id), reason, &ban_id)

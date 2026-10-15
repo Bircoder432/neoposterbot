@@ -40,7 +40,6 @@ master_help = """👑 Admin panel:
 /broadcast — send message to all bot owners
 /setplan <user_id> <free|pro> — set plan manually
 /banclient <user_id> — ban a client"""
-
 only_owner_add_admins = "❌ Only the owner can add admins."
 only_owner_remove_admins = "❌ Only the owner can remove admins."
 only_owner_list_admins = "❌ Only the owner can list admins."
@@ -86,7 +85,6 @@ admin_frozen_msg = "✅ Moderator frozen."
 admin_unfrozen_msg = "✅ Moderator unfrozen."
 limit_reached_unfreeze = "❌ Free plan limit reached. Freeze another moderator or upgrade to Pro."
 free_limit_admins = "❌ Free plan limit reached: you can only add 1 moderator. Please upgrade your plan."
-
 no_new_proposals = "✅ No new proposals."
 proposal_items_count = "📨 Proposal ({count} item(s)):"
 failed_display_media = "❌ Failed to display media: {e}"
@@ -118,7 +116,6 @@ new_proposal_notif = """📨 New proposal!
 proposal_accepted = "✅ Your proposal has been accepted! It will be reviewed by moderators anonymously."
 reply_accepted = "✅ Your reply has been accepted!"
 error_sending_reply = "❌ Error sending reply."
-
 no_active_bans = "✅ No active bans."
 active_bans_header = """🚫 Active bans:
 """
@@ -136,7 +133,6 @@ Reason: {reason}
 Appeal code: {ban_id}"""
 user_banned_success = "✅ User banned."
 error_banning_user = "❌ Error banning user."
-
 reply_usage = "📝 Usage: /reply <post_ID>"
 send_reply_to_post = """✍️ Send your reply to the post.
 /cancel — exit reply mode."""
@@ -153,7 +149,6 @@ addreplies_already_exists = "ℹ️ This post already has a reply button."
 addreplies_success = "✅ Reply button added to the post!"
 addreplies_failed_get = "❌ Failed to get post: {e}"
 addreplies_failed_edit = "❌ Failed to edit post: {e}"
-
 text_proposal = """💬 Text proposal:
 {caption}"""
 media_proposal_text = """💬 {media_type}
@@ -167,19 +162,15 @@ voice_text = "🎤 Voice message"
 sticker_text = "😊 Sticker"
 media_content_text = "📦 Media content"
 make_by = "\nmake by {username}"
-
-# ===== язык =====
 lang_usage = "📝 Usage: /lang <en|ru>"
 lang_invalid = "❌ Invalid language. Use 'en' or 'ru'."
 lang_updated = "✅ Language updated to English."
-
 setup_checking = "🔍 Checking admin rights..."
 setup_not_admin = "❌ I am not an administrator in this channel. Please add me and try again."
 setup_chat_not_found = "❌ Channel not found. Make sure it is public or send the correct ID (-100...)."
 setup_success = "✅ Setup complete! Channel '{channel_name}' linked successfully. Use /start to see the panel."
 setup_enter_channel = "➕ Now, please add the bot to your Telegram channel as an administrator."
 send_command_in_your_channel = "Send command in your channel:"
-
 clients_list_title = "👥 Clients list"
 clients_empty = "No clients yet."
 client_not_found = "❌ Client not found."
@@ -212,14 +203,12 @@ bot_info = """🤖 <b>Bot info</b>
 bot_status_active = "✅ Active"
 bot_status_inactive = "❌ Inactive"
 channel_not_configured = "Not configured"
-
 field_tg_id = "Telegram ID"
 field_plan = "Plan"
 field_status = "Status"
 field_bots = "Bots"
 field_username = "Username"
 field_channel = "Channel"
-
 report_link_text = "⚠️ Report"
 send_report_to_post = """⚠️ Send your report. Describe what's wrong with this post.
 /cancel — cancel."""
@@ -244,7 +233,6 @@ reporter_banned_msg = "🚫 Reporter banned. Ban ID: {ban_id}"
 reporter_already_banned = "ℹ️ Reporter is already banned."
 report_gone = "❌ Report already processed."
 report_ban_reason = "Banned for false report. Original report: {reason}"
-
 audit_title = """📋 <b>Audit Log</b> (last 20 actions):
 """
 audit_empty = "📋 No actions logged yet."
@@ -260,7 +248,6 @@ audit_action_remove_admin = "Removed admin"
 audit_action_dismiss_report = "Dismissed report"
 audit_action_ban_reporter = "Banned reporter"
 audit_action_delete_post = "Deleted reported post"
-
 broadcast_prompt = """📢 Send the message to broadcast to all bot owners.
 /cancel — cancel."""
 broadcast_started = "🚀 Broadcasting..."
@@ -269,7 +256,6 @@ broadcast_finished = """✅ Broadcast finished.
 ❌ Failed: {failed}"""
 broadcast_no_clients = "❌ No bot owners to send to."
 bots_list_title = """🤖 <b>All worker bots:</b>
-
 """
 bots_list_entry = """{i}. @{username} (ID: {bot_id})
 👤 Owner: <code>{client_id}</code> | {status}
@@ -277,7 +263,12 @@ bots_list_entry = """{i}. @{username} (ID: {bot_id})
 bots_list_empty = "📋 No bots registered yet."
 bot_status_active_text = "✅ Active"
 bot_status_inactive_text = "❌ Inactive"
-
+nopostme_no_username = "❌ You need a public Telegram username to use this command."
+nopostme_success = "✅ Your username @{username} has been added to the blacklist. Posts containing it will be automatically rejected."
+allowpostme_no_username = "❌ You need a public Telegram username to use this command."
+allowpostme_success = "✅ Your username @{username} has been removed from the blacklist."
+allowpostme_not_found = "ℹ️ Your username was not found in the blacklist."
+auto_reject_forbidden_username = "❌ Auto-rejection: forbidden username detected in the text."
 
 [ru]
 welcome = """🤖 Добро пожаловать в анонимную предложку!
@@ -321,7 +312,6 @@ master_help = """👑 Панель администратора:
 /broadcast — рассылка всем владельцам ботов
 /setplan <user_id> <free|pro> — выдать план вручную
 /banclient <user_id> — забанить клиента"""
-
 only_owner_add_admins = "❌ Только владелец бота может добавлять администраторов."
 only_owner_remove_admins = "❌ Только владелец может удалять администраторов."
 only_owner_list_admins = "❌ Только владелец может просматривать список администраторов."
@@ -367,7 +357,6 @@ admin_frozen_msg = "✅ Модератор заморожен."
 admin_unfrozen_msg = "✅ Модератор разморожен."
 limit_reached_unfreeze = "❌ Достигнут лимит бесплатного тарифа. Заморозьте другого модератора или обновитесь до Pro."
 free_limit_admins = "❌ Достигнут лимит бесплатного тарифа: можно добавить только 1 модератора. Пожалуйста, улучшите тариф."
-
 no_new_proposals = "✅ Нет новых предложений."
 proposal_items_count = "📨 Предложение ({count} элем.):"
 failed_display_media = "❌ Ошибка отображения медиа: {e}"
@@ -399,7 +388,6 @@ new_proposal_notif = """📨 Новое предложение!
 proposal_accepted = "✅ Ваше предложение принято! Оно будет рассмотрено модераторами анонимно."
 reply_accepted = "✅ Ваш ответ принят!"
 error_sending_reply = "❌ Ошибка при отправке ответа."
-
 no_active_bans = "✅ Список банов пуст."
 active_bans_header = """🚫 Активные блокировки:
 """
@@ -417,7 +405,6 @@ user_banned_appeal = """🚫 Вы заблокированы.
 Код обращения: {ban_id}"""
 user_banned_success = "✅ Пользователь заблокирован."
 error_banning_user = "❌ Ошибка при блокировке."
-
 reply_usage = "📝 Использование: /reply <ID_поста>"
 send_reply_to_post = """✍️ Отправьте ваш ответ на пост.
 /cancel — выход из режима ответа."""
@@ -434,7 +421,6 @@ addreplies_already_exists = "ℹ️ У этого поста уже есть к�
 addreplies_success = "✅ Кнопка ответа добавлена к посту!"
 addreplies_failed_get = "❌ Не удалось получить пост: {e}"
 addreplies_failed_edit = "❌ Не удалось изменить пост: {e}"
-
 text_proposal = """💬 Текст предложения:
 {caption}"""
 media_proposal_text = """💬 {media_type}
@@ -448,18 +434,15 @@ voice_text = "🎤 Голосовое сообщение"
 sticker_text = "😊 Стикер"
 media_content_text = "📦 Медиа-контент"
 make_by = "\nсделано с помощью {username}"
-
 lang_usage = "📝 Использование: /lang <en|ru>"
 lang_invalid = "❌ Неверный язык. Используйте 'en' или 'ru'."
 lang_updated = "✅ Язык изменен на Русский."
-
 setup_checking = "🔍 Проверка прав администратора..."
 setup_not_admin = "❌ Я не являюсь администратором в этом канале. Пожалуйста, добавьте меня и попробуйте снова."
 setup_chat_not_found = "❌ Канал не найден. Убедитесь, что он публичный, или отправьте корректный ID (-100...)."
 setup_success = "✅ Настройка завершена! Канал '{channel_name}' успешно привязан. Отправьте /start, чтобы открыть панель."
 setup_enter_channel = "➕ Теперь добавьте бота в ваш Telegram-канал как администратора."
 send_command_in_your_channel = "Отправьте в ваш канал команду:"
-
 clients_list_title = "👥 Список клиентов"
 clients_empty = "Клиентов пока нет."
 client_not_found = "❌ Клиент не найден."
@@ -492,14 +475,12 @@ bot_info = """🤖 <b>Bot info</b>
 bot_status_active = "✅ Активен"
 bot_status_inactive = "❌ Неактивен"
 channel_not_configured = "Не настроен"
-
 field_tg_id = "Telegram ID"
 field_plan = "Тариф"
 field_status = "Статус"
 field_bots = "Ботов"
 field_username = "Юзернейм"
 field_channel = "Канал"
-
 report_link_text = "⚠️ Пожаловаться"
 send_report_to_post = """⚠️ Отправьте вашу жалобу. Опишите, что не так с этим постом.
 /cancel — отмена."""
@@ -524,7 +505,6 @@ reporter_banned_msg = "🚫 Репортёр забанен. ID бана: {ban_i
 reporter_already_banned = "ℹ️ Репортёр уже забанен."
 report_gone = "❌ Жалоба уже обработана."
 report_ban_reason = "Бан за ложную жалобу. Оригинальная жалоба: {reason}"
-
 audit_title = """📋 <b>Журнал действий</b> (последние 20):
 """
 audit_empty = "📋 Записей пока нет."
@@ -540,7 +520,6 @@ audit_action_remove_admin = "Удалил модератора"
 audit_action_dismiss_report = "Отклонил жалобу"
 audit_action_ban_reporter = "Забанил репортёра"
 audit_action_delete_post = "Удалил пост по жалобе"
-
 broadcast_prompt = """📢 Отправьте сообщение для рассылки всем владельцам ботов.
 /cancel — отмена."""
 broadcast_started = "🚀 Рассылка запущена..."
@@ -549,7 +528,6 @@ broadcast_finished = """✅ Рассылка завершена.
 ❌ Ошибок: {failed}"""
 broadcast_no_clients = "❌ Нет владельцев ботов для рассылки."
 bots_list_title = """🤖 <b>Все воркер-боты:</b>
-
 """
 bots_list_entry = """{i}. @{username} (ID: {bot_id})
 👤 Владелец: <code>{client_id}</code> | {status}
@@ -557,3 +535,9 @@ bots_list_entry = """{i}. @{username} (ID: {bot_id})
 bots_list_empty = "📋 В системе пока нет зарегистрированных ботов."
 bot_status_active_text = "✅ Активен"
 bot_status_inactive_text = "❌ Неактивен"
+nopostme_no_username = "❌ Для использования этой команды у вас должен быть публичный юзернейм Telegram."
+nopostme_success = "✅ Ваш юзернейм @{username} добавлен в чёрный список. Посты, содержащие его, будут автоматически отклоняться."
+allowpostme_no_username = "❌ Для использования этой команды у вас должен быть публичный юзернейм Telegram."
+allowpostme_success = "✅ Ваш юзернейм @{username} удалён из чёрного списка."
+allowpostme_not_found = "ℹ️ Ваш юзернейм не найден в чёрном списке."
+auto_reject_forbidden_username = "❌ Автоотклонение: в тексте обнаружен запрещённый юзернейм."
