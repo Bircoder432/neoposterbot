@@ -10,12 +10,17 @@ Your identity will be hidden - moderators will only see the content of your mess
 • Video notes
 • Audio and voice messages
 • Stickers
-Your proposal will be reviewed shortly!"""
+Your proposal will be reviewed shortly!
+/nopostme for ban posting your username
+/allowpostme for allow posting tour username
+/cancel for quit from reply mode
+"""
 owner_panel = """👑 Owner Panel
 Commands:
 /addadmin — generate invite link
 /admins — manage admins
 /banned
+/blacklist
 /proposals
 /pardon <BAN-ID>
 /reply <ID>
@@ -269,6 +274,13 @@ allowpostme_no_username = "❌ You need a public Telegram username to use this c
 allowpostme_success = "✅ Your username @{username} has been removed from the blacklist."
 allowpostme_not_found = "ℹ️ Your username was not found in the blacklist."
 auto_reject_forbidden_username = "❌ Auto-rejection: forbidden username detected in the text."
+blacklist_empty = "✅ The blacklist is empty."
+blacklist_title = "🚫 <b>Blacklisted usernames:</b>\n"
+blacklist_entry = "• @{username}\n"
+cancel_proposal_btn = "❌ Cancel"
+proposal_canceled_msg = "✅ Proposal canceled."
+proposal_canceled_success = "❌ Your proposal has been canceled and removed from the queue."
+proposal_already_processed = "⏳ The proposal is already being processed by moderators or has been removed."
 
 [ru]
 welcome = """🤖 Добро пожаловать в анонимную предложку!
@@ -282,12 +294,17 @@ welcome = """🤖 Добро пожаловать в анонимную пред
 • Кружочки (видеосообщения)
 • Аудио и голосовые сообщения
 • Стикеры
-Ваше предложение будет рассмотрено в ближайшее время!"""
+Ваше предложение будет рассмотрено в ближайшее время!
+/nopostme для запрета на пост вашего юзернейм
+/allowpostme чтобы снова разрешить постить ваш юзернейм
+/cancel для выхода из режима ответа
+"""
 owner_panel = """👑 Панель владельца
 Команды:
 /addadmin — создать пригласительную ссылку
 /admins — управление администраторами
 /banned
+/blacklist
 /proposals
 /pardon <BAN-ID>
 /reply <ID>
@@ -541,3 +558,10 @@ allowpostme_no_username = "❌ Для использования этой ком
 allowpostme_success = "✅ Ваш юзернейм @{username} удалён из чёрного списка."
 allowpostme_not_found = "ℹ️ Ваш юзернейм не найден в чёрном списке."
 auto_reject_forbidden_username = "❌ Автоотклонение: в тексте обнаружен запрещённый юзернейм."
+blacklist_empty = "✅ Чёрный список пуст."
+blacklist_title = "🚫 <b>Юзернеймы в чёрном списке:</b>\n"
+blacklist_entry = "• @{username}\n"
+cancel_proposal_btn = "❌ Отменить"
+proposal_canceled_msg = "✅ Предложение отменено."
+proposal_canceled_success = "❌ Ваше предложение было отменено и удалено из очереди."
+proposal_already_processed = "⏳ Предложение уже обрабатывается модераторами или было удалено."

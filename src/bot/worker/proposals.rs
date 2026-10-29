@@ -101,17 +101,27 @@ pub(super) async fn handle_proposal(bot: &Bot, msg: &Message, state: &WorkerStat
             media_type,
             media_file_id,
             media_group_id,
-            proposal_group_id,
+            proposal_group_id: proposal_group_id.clone(),
             parent_message_id,
         })
         .await;
 
     if inserted {
         if parent_message_id.is_some() {
+            let kb = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+                l10n!(lang, "cancel_proposal_btn"),
+                format!("cancel_{}", proposal_group_id),
+            )]]);
             bot.send_message(chat_id, l10n!(lang, "reply_accepted"))
+                .reply_markup(kb)
                 .await?;
         } else {
+            let kb = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+                l10n!(lang, "cancel_proposal_btn"),
+                format!("cancel_{}", proposal_group_id),
+            )]]);
             bot.send_message(chat_id, l10n!(lang, "proposal_accepted"))
+                .reply_markup(kb)
                 .await?;
         }
         notify_admins(bot, state, &notif_text, &notif_type, lang).await?;
@@ -224,14 +234,19 @@ pub(super) async fn handle_reply_content(
             media_type,
             media_file_id,
             media_group_id,
-            proposal_group_id,
+            proposal_group_id: proposal_group_id.clone(),
             parent_message_id: Some(parent_id),
         })
         .await;
 
     if inserted {
         state.user_states.remove(&user_id);
+        let kb = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+            l10n!(lang, "cancel_proposal_btn"),
+            format!("cancel_{}", proposal_group_id),
+        )]]);
         bot.send_message(chat_id, l10n!(lang, "reply_accepted"))
+            .reply_markup(kb)
             .await?;
         notify_admins(bot, state, &notif_text, &notif_type, lang).await?;
     }

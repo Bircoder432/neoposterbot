@@ -135,6 +135,13 @@ impl ProposalStore {
         inner.pending.push_front(proposal.clone());
         Some(proposal)
     }
+
+    pub async fn cancel_by_group_id(&self, group_id: &str) -> bool {
+        let mut inner = self.inner.lock().await;
+        let initial_len = inner.pending.len();
+        inner.pending.retain(|p| p.group_id != group_id);
+        inner.pending.len() < initial_len
+    }
 }
 
 #[cfg(test)]

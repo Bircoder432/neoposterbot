@@ -48,6 +48,39 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
 
     let lang = state.db.get_language(bot_id).await?;
 
+    if let Some(group_id) = data.strip_prefix("cancel_") {
+        let canceled = state.proposals.cancel_by_group_id(group_id).await;
+
+        if canceled {
+            bot.answer_callback_query(q.id.clone())
+                .text(l10n!(lang, "proposal_canceled_msg"))
+                .await?;
+            if let Some(MaybeInaccessibleMessage::Regular(msg)) = &q.message {
+                bot.edit_message_text(
+                    msg.chat.id,
+                    msg.id,
+                    l10n!(lang, "proposal_canceled_success"),
+                )
+                .await
+                .ok();
+            }
+        } else {
+            bot.answer_callback_query(q.id.clone())
+                .text(l10n!(lang, "proposal_already_processed"))
+                .await?;
+            if let Some(MaybeInaccessibleMessage::Regular(msg)) = &q.message {
+                bot.edit_message_text(
+                    msg.chat.id,
+                    msg.id,
+                    l10n!(lang, "proposal_already_processed"),
+                )
+                .await
+                .ok();
+            }
+        }
+        return Ok(());
+    }
+
     if let Some(true) = state.db.get_admin_status(bot_id, user_id).await? {
         bot.answer_callback_query(q.id.clone())
             .text(l10n!(lang, "mod_frozen_action"))

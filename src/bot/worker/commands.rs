@@ -28,6 +28,7 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
         "addadmin" => admins::handle_add_admin(bot, msg, state).await,
         "admins" => admins::handle_admins(bot, msg, state).await,
         "banned" => handle_banned(bot, msg, state).await,
+        "blacklist" => handle_blacklist(bot, msg, state).await,
         "pardon" => handle_pardon(bot, msg, state, args).await,
         "reply" => handle_reply_command(bot, msg, state, args).await,
         "addreplies" => handle_add_replies(bot, msg, state, args).await,
@@ -268,6 +269,34 @@ async fn handle_audit(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
             target = log.target
         ));
     }
+    bot.send_message(msg.chat.id, text)
+        .parse_mode(teloxide::types::ParseMode::Html)
+        .await?;
+    Ok(())
+}
+
+async fn handle_blacklist(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
+    let user_id = msg.from.as_ref().unwrap().id.0 as i64;
+    let lang = state.db.get_language(state.bot_id).await?;
+
+    if user_id != state.client_tg_id {
+        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
+            .await?;
+        return Ok(());
+    }
+
+    let usernames = state.db.get_banned_usernames(state.bot_id).await?;
+    if usernames.is_empty() {
+        bot.send_message(msg.chat.id, l10n!(lang, "blacklist_empty"))
+            .await?;
+        return Ok(());
+    }
+
+    let mut text = l10n!(lang, "blacklist_title");
+    for uname in usernames {
+        text.push_str(&l10n!(lang, "blacklist_entry", username = uname));
+    }
+
     bot.send_message(msg.chat.id, text)
         .parse_mode(teloxide::types::ParseMode::Html)
         .await?;
