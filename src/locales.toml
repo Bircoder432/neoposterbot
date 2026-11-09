@@ -34,13 +34,26 @@ mod_frozen_panel = """🛠️ Moderator Panel
 ⚠️ You are currently ❄️ FROZEN. You cannot perform moderation actions until the bot owner unfreezes you."""
 mod_frozen_action = "❌ You are frozen and cannot perform this action."
 no_access = "❌ No access."
-master_help = """👑 Admin panel:
-/stats — service statistics
-/clients — clients list
-/bots — all worker bots
-/broadcast — send message to all bot owners
-/setplan <user_id> <free|pro> — set plan manually
-/banclient <user_id> — ban a client"""
+master_help = """👑 Service owner panel
+
+Most actions are available through the menu (/menu):
+👥 Clients - list, details, ban/unban, plan changes
+🤖 Bots - all worker bots of the service
+🚫 Banned - banned clients with instant unban
+📊 Statistics · 📣 Broadcast
+🎁 Promo codes - free PRO or a purchase discount
+⚙️ PRO settings - subscription duration and price
+👤 Cabinet - your own client cabinet
+🌐 Language - interface language
+
+Commands:
+/stats - service statistics
+/clients - clients · /bots - bots
+/broadcast - message to all bot owners
+/setplan <user_id> <free|pro> - set the plan manually
+/banclient <user_id> - ban a client
+/check <username> - check a bot
+/lang <en|ru> - master-bot language"""
 only_owner_add_admins = "❌ Only the owner can add admins."
 only_owner_remove_admins = "❌ Only the owner can remove admins."
 only_owner_list_admins = "❌ Only the owner can list admins."
@@ -54,7 +67,7 @@ Use /start to access the moderation panel."""
 admin_added_frozen_notification = """🎉 You have been added as a moderator, but you are currently ❄️ FROZEN.
 The bot owner needs to upgrade to Pro to unfreeze you."""
 admin_added_frozen = """✅ User {name} added as moderator, but ❄️ FROZEN.
-You have reached the Free plan limit. Upgrade to Pro to unfreeze moderators."""
+The Free plan allows 2 active moderators. Upgrade to Pro to keep more unfrozen."""
 admin_invite_link = """🔗 Send this link to the person you want to add as admin:
 {link}
 The link is valid for 24 hours and can only be used once."""
@@ -85,7 +98,7 @@ invite_revoked_msg = "❌ Invitation link revoked."
 admin_frozen_msg = "✅ Moderator frozen."
 admin_unfrozen_msg = "✅ Moderator unfrozen."
 limit_reached_unfreeze = "❌ Free plan limit reached. Freeze another moderator or upgrade to Pro."
-free_limit_admins = "❌ Free plan limit reached: you can only add 1 moderator. Please upgrade your plan."
+free_limit_admins = "❌ Free plan limit reached: you can have up to 2 active moderators. Please upgrade your plan."
 no_new_proposals = "✅ No new proposals."
 proposal_items_count = "📨 Proposal ({count} item(s)):"
 failed_display_media = "❌ Failed to display media: {e}"
@@ -123,8 +136,8 @@ Press the button below to open the proposal 👇"""
 proposal_accepted = "✅ Your proposal has been accepted! It will be reviewed by moderators anonymously."
 reply_accepted = "✅ Your reply has been accepted!"
 error_sending_reply = "❌ Error sending reply."
-no_active_bans = "✅ No active bans."
-active_bans_header = """🚫 Active bans:
+no_active_bans = "✅ No banned users."
+active_bans_header = """🚫 Banned users:
 """
 ban_record_entry = """{i}. {ban_id}
 Reason: {reason}
@@ -309,8 +322,7 @@ menu_btn_proposals = "📨 Proposals"
 menu_btn_reports = "⚠️ Reports"
 menu_btn_admins = "👥 Moderators"
 menu_btn_addadmin = "🔗 Invite mod."
-menu_btn_banned = "🚫 Bans"
-menu_btn_pardon = "⚖️ Pardon ban"
+menu_btn_banned = "🚫 Banned users"
 menu_btn_blacklist = "⛔ Username blacklist"
 menu_btn_audit = "📋 Audit log"
 menu_btn_reply = "✍️ Reply to post"
@@ -323,10 +335,6 @@ cancel_flow_btn = "❌ Cancel"
 flow_cancelled_msg = "❌ Cancelled."
 user_nopostme_btn = "⛔ Block posts with my username"
 user_allowpostme_btn = "✅ Allow posts with my username"
-pardon_prompt = """⚖️ <b>Pardon a ban</b>
-
-Send the ban code (BAN-ID) that should be deactivated.
-Example: <code>BAN-A1B2C3</code>"""
 reply_id_prompt = """✍️ <b>Reply to a post</b>
 
 Send the ID of the channel post you want to reply to.
@@ -336,7 +344,7 @@ addreplies_prompt = """➕ <b>Add reply buttons to a post</b>
 Send the link to the channel post.
 Example: <code>https://t.me/c/1234567890/5</code>"""
 reply_id_invalid = "❌ Invalid post ID. Send a number, for example: 123"
-pardon_ban_btn = "⚖️ Pardon {ban_id}"
+pardon_ban_btn = "🔓 Pardon {ban_id}"
 skip_btn = "⏭ Skip"
 skipped_msg = "⏭ Proposal skipped."
 media_label_text = "💬 Text"
@@ -347,6 +355,136 @@ media_label_video_note = "📹 Video note"
 media_label_audio = "🎵 Audio"
 media_label_voice = "🎤 Voice message"
 media_label_sticker = "😊 Sticker"
+
+# --- Master bot v2: menus, banned clients, language, free-plan limits ---
+mbtn_clients = "👥 Clients"
+mbtn_bots = "🤖 Bots"
+mbtn_banned = "🚫 Banned"
+mbtn_stats = "📊 Stats"
+mbtn_broadcast = "📣 Broadcast"
+mbtn_promo = "🎁 Promo codes"
+mbtn_proset = "⚙️ PRO settings"
+mbtn_cabinet = "👤 Cabinet"
+mbtn_help = "🆘 Help"
+mbtn_lang = "🌐 Language"
+mbtn_refresh = "🔄 Refresh"
+mbtn_custom = "✍️ Other"
+mbtn_cancel = "✖️ Cancel"
+mbtn_to_list = "↩️ To list"
+mbtn_unlimited = "♾ Unlimited"
+mbtn_promo_more = "➕ Create another"
+mbtn_delete_yes = "✅ Yes, delete"
+mbtn_pro_days = "📅 Change duration"
+mbtn_pro_price = "⭐ Change price"
+mbtn_promo_kfree = "🎁 Free PRO"
+mbtn_promo_kdisc = "💰 Purchase discount"
+mbtn_promo_create = "➕ Create promo code"
+mk_add_bot = "➕ Add bot"
+mk_my_bots = "🤖 My bots"
+mk_check_bot = "🔍 Check bot"
+mk_redeem_promo = "🎁 Redeem promo code"
+mk_buy_pro = "⭐ Buy Pro ({price} Stars)"
+mk_buy_pro_disc = "⭐ Buy Pro −{discount}% ({price} Stars)"
+mk_pro_active = "✅ Pro subscription active"
+mk_instruction = "📚 Instructions"
+master_owner_menu = """👑 <b>Control panel</b>
+
+Clients: <b>{clients}</b> · Promo codes: <b>{promos}</b>
+Pick a section below:"""
+master_stats_text = """📊 <b>Statistics</b>
+
+Clients: <b>{clients}</b>
+Active bots: <b>{bots}</b>
+PRO clients: <b>{pro}</b>
+Free clients: <b>{free}</b>
+Promo codes: <b>{promos}</b> (active: <b>{active}</b>)"""
+master_welcome = """Welcome to the proposal board constructor!
+Here you can create your own bot for anonymous proposals and link it to your Telegram channel.
+
+🆓 Free plan: 1 bot and up to 2 moderators, posts are published with a watermark.
+⭐ PRO: unlimited bots and moderators, no watermark.
+
+Redeem a promo code or buy a Pro subscription to lift the limits."""
+master_cabinet_title = "👤 <b>Client cabinet</b>\nHere you are - as a regular client: create your bot, link it to a channel, redeem a promo code or buy PRO."
+master_lang_title = "🌐 <b>Choose language:</b>"
+master_add_bot_prompt = "Send your bot's token from @BotFather."
+master_token_invalid = "❌ Invalid token. Try again."
+master_bot_saved = "✅ Bot @{username} linked successfully!\nI have started your bot. Open its private chat (@{username}) and send /start for the initial setup (language selection and channel linking)."
+master_bot_save_error = "❌ Save error: {e}"
+master_bot_limit = """❌ <b>Free plan limit</b>
+
+Free plan clients can keep only one active bot.
+Unlink the current bot, or buy PRO - then the number of bots is unlimited.
+
+A promo code can also give you PRO for free or with a discount."""
+master_my_bots_empty = "You have no active bots yet. Tap \"Add bot\" to create the first one."
+master_my_bots_title = "🤖 <b>Your active bots:</b>\nTap a button to unlink the bot."
+master_unbind_btn = "🗑 Unlink @{username} (ID: {id})"
+master_unbind_ok = "✅ Bot unlinked and stopped."
+master_unbind_ok2 = "The bot was unlinked successfully. You can link it again at any time."
+master_unbind_not_yours = "❌ Error: this is not your bot."
+master_check_prompt = "🔍 <b>Bot check</b>\nSend the bot's username (e.g. <code>@mybot</code>) to check it.\n/cancel — cancel."
+master_check_usage = "📝 <b>Usage:</b> <code>/check &lt;username&gt;</code>\n<b>Example:</b> <code>/check @mybot</code>"
+master_check_invalid_input = "❌ Send the bot's username (e.g. @mybot)."
+master_check_invalid_username = "❌ Invalid username. Use the format @username."
+master_check_ok = "✅ Bot @{username} is served by {service}\n📊 Status: {status}\n📢 Channel: {channel}"
+master_check_status_ok = "✅ Set up and running"
+master_check_status_pending = "⏳ Registered, setup not finished"
+master_check_not_serviced = "❌ Bot @{username} is not served by {service}"
+master_invoice_title = "Pro subscription ({days} days)"
+master_invoice_title_disc = "Pro subscription ({days} days) with discount"
+master_invoice_desc = "Lifts the Free plan limits (2 moderators, 1 bot) and removes the watermark from posts for {days} days."
+master_invoice_desc_disc = "Lifts the Free plan limits (2 moderators, 1 bot) and removes the watermark from posts for {days} days. {discount}% discount applied!"
+master_pro_active_toast = "✅ Your Pro subscription is active! Watermarks disabled, limits lifted."
+master_payment_success = "✅ You have successfully bought a Pro subscription for {days} days{until}!\nAll limits lifted, watermarks disabled."
+master_pro_until_suffix = " (active until {date})"
+master_redeem_prompt = "🎁 Send the promo code (e.g. <code>PROMO-AB12CD34</code>).\n/cancel — cancel."
+master_promo_invalid_input = "❌ Send the promo code as text, e.g. PROMO-AB12CD34."
+master_redeem_free_ok = "✅ Promo code activated! You got free PRO for {days} days{until}. Limits lifted, watermarks disabled."
+master_redeem_disc_ok = "✅ Promo code activated! A {percent}% discount on PRO will be applied automatically at checkout."
+master_promo_title = "🎁 <b>Promo codes</b> (page {page}/{total})\nTap a code for details."
+master_promo_empty = "🎁 <b>Promo codes</b>\n\nNo promo codes yet.\nCreate the first one - give clients a free PRO or a discount on purchase."
+master_promo_create_title = "🎁 <b>Creating a promo code</b>\n\nWhich type?\n\n<b>🎁 Free PRO</b> - redemption grants PRO for N days without payment.\n<b>💰 Discount</b> - the PRO price is reduced by N% at purchase."
+master_promo_days_title = "🎁 <b>Free PRO</b>\nFor how many days?"
+master_promo_percent_title = "💰 <b>PRO purchase discount</b>\nWhat percent? (1–99%)"
+master_promo_uses_title = "🎁 <b>{kind}</b>\nHow many times can the code be redeemed?"
+master_promo_days_prompt = "🎁 Send the number of days for the free PRO (1–365).\n/cancel — cancel."
+master_promo_percent_prompt = "💰 Send the discount percent (1–99).\n/cancel — cancel."
+master_promo_uses_prompt = "Send the activation limit (0 - unlimited, 1–10000).\n/cancel — cancel."
+master_promo_created = "✅ <b>Promo code created!</b>\n\n<code>{code}</code>\n\nType: {type}\nLimit: {uses}\n\nSend the code to your clients - they redeem it with the 🎁 button in the main menu."
+master_promo_uses_unlimited = "unlimited"
+master_promo_uses_n = "{n} activations"
+master_promo_type_free = "🎁 Free PRO for {days} days"
+master_promo_type_disc = "💰 {percent}% discount on PRO purchase"
+master_promo_short_free = "🎁 PRO {days}d"
+master_promo_short_disc = "💰 −{percent}%"
+master_promo_details = "🎁 <b>Promo code</b>\n\nCode: <code>{code}</code>\nType: {type}\nRedemptions: {uses}\nStatus: {status}\nCreated: {created}"
+master_promo_active = "✅ Active"
+master_promo_inactive = "⏸ Deactivated"
+master_promo_uses_of_unlimited = "{used} of ∞ (unlimited)"
+master_promo_uses_of = "{used} of {max}"
+master_promo_deactivate = "⏸ Deactivate"
+master_promo_activate = "▶️ Activate"
+master_promo_del_confirm = "🗑 Delete the promo code <code>{code}</code>?\n\nPRO grants and discounts already issued will remain. Redemption statistics will be deleted."
+master_status_updated = "✅ Status updated"
+master_promo_deleted = "🗑 Promo code deleted"
+master_proset_title = "⚙️ <b>PRO settings</b>\n\n📅 Duration: <b>{days}</b> days\n⭐ Price: <b>{price}</b> Stars\n\nThe duration applies to PRO purchases, manual grants and free-PRO promo codes (a custom duration can be set per promo code). Discount promo codes reduce the price automatically."
+master_prodays_title = "📅 <b>New PRO duration</b>\nHow many days does the subscription last?"
+master_proprice_title = "⭐ <b>New PRO price</b>\nHow many Stars does the subscription cost?"
+master_prodays_prompt = "📅 Send the PRO duration in days (1–365).\n/cancel — cancel."
+master_proprice_prompt = "⭐ Send the new PRO price in Stars (1–250000).\n/cancel — cancel."
+master_prodays_updated = "✅ PRO duration updated: {days} days."
+master_proprice_updated = "✅ PRO price updated: {price} Stars."
+master_err_days = "❌ Send a number from 1 to 365."
+master_err_percent = "❌ Send a percent from 1 to 99."
+master_err_uses = "❌ Send a number from 0 (unlimited) to 10000."
+master_err_price = "❌ Send a price from 1 to 250000 Stars."
+master_setplan_usage = "Usage: /setplan <user_id> <free|pro>"
+master_setplan_ok = "✅ Plan for {id} changed to {plan}."
+master_bots_stopped_note = " Extra bots stopped: {count}."
+master_banclient_ok = "🚫 Client {id} banned. Bots stopped."
+master_banned_title = "🚫 <b>Banned clients</b> (page {page}/{total})\nTap a client to unban them instantly."
+master_banned_empty = "✅ No banned clients."
 
 [ru]
 welcome = """🤖 Добро пожаловать в анонимную предложку!
@@ -384,13 +522,26 @@ mod_frozen_panel = """🛠️ Панель модератора
 ⚠️ Вы сейчас ❄️ ЗАМОРОЖЕНЫ. Вы не можете выполнять модераторские действия, пока владелец бота вас не разморозит."""
 mod_frozen_action = "❌ Вы заморожены и не можете выполнять это действие."
 no_access = "❌ У вас нет доступа к этой функции."
-master_help = """👑 Панель администратора:
+master_help = """👑 Панель владельца сервиса
+
+Основные действия доступны через меню (/menu):
+👥 Клиенты — список, детали, бан/разбан, смена плана
+🤖 Боты — все воркер-боты сервиса
+🚫 Заблокированные — забаненные клиенты, мгновенный разбан
+📊 Статистика · 📣 Рассылка
+🎁 Промокоды — бесплатный PRO или скидка на покупку
+⚙️ Настройки PRO — срок и цена подписки
+👤 Кабинет — ваш личный кабинет клиента
+🌐 Язык — язык интерфейса
+
+Команды:
 /stats — статистика сервиса
-/clients — список клиентов
-/bots — все воркер-боты
+/clients — клиенты · /bots — боты
 /broadcast — рассылка всем владельцам ботов
 /setplan <user_id> <free|pro> — выдать план вручную
-/banclient <user_id> — забанить клиента"""
+/banclient <user_id> — забанить клиента
+/check <username> — проверка бота
+/lang <en|ru> — язык мастер-бота"""
 only_owner_add_admins = "❌ Только владелец бота может добавлять администраторов."
 only_owner_remove_admins = "❌ Только владелец может удалять администраторов."
 only_owner_list_admins = "❌ Только владелец может просматривать список администраторов."
@@ -404,7 +555,7 @@ admin_added_notification = """🎉 Вы были добавлены как мо�
 admin_added_frozen_notification = """🎉 Вы были добавлены как модератор, но сейчас вы ❄️ ЗАМОРОЖЕНЫ.
 Владельцу бота нужно обновиться до Pro, чтобы разморозить вас."""
 admin_added_frozen = """✅ Пользователь {name} добавлен как модератор, но ❄️ ЗАМОРОЖЕН.
-Вы достигли лимита бесплатного тарифа. Обновите до Pro, чтобы разморозить модераторов."""
+На бесплатном тарифе доступно 2 активных модератора. Обновитесь до Pro, чтобы разморозить всех."""
 admin_invite_link = """🔗 Отправьте эту ссылку человеку, которого хотите добавить как администратора:
 {link}
 Ссылка действительна 24 часа и может быть использована только один раз."""
@@ -435,7 +586,7 @@ invite_revoked_msg = "❌ Пригласительная ссылка отозв
 admin_frozen_msg = "✅ Модератор заморожен."
 admin_unfrozen_msg = "✅ Модератор разморожен."
 limit_reached_unfreeze = "❌ Достигнут лимит бесплатного тарифа. Заморозьте другого модератора или обновитесь до Pro."
-free_limit_admins = "❌ Достигнут лимит бесплатного тарифа: можно добавить только 1 модератора. Пожалуйста, улучшите тариф."
+free_limit_admins = "❌ Достигнут лимит бесплатного тарифа: доступно до 2 активных модераторов. Пожалуйста, улучшите тариф."
 no_new_proposals = "✅ Нет новых предложений."
 proposal_items_count = "📨 Предложение ({count} элем.):"
 failed_display_media = "❌ Ошибка отображения медиа: {e}"
@@ -473,8 +624,8 @@ new_proposal_notif = """🔔 <b>УВЕДОМЛЕНИЕ О НОВОМ ПРЕДЛ�
 proposal_accepted = "✅ Ваше предложение принято! Оно будет рассмотрено модераторами анонимно."
 reply_accepted = "✅ Ваш ответ принят!"
 error_sending_reply = "❌ Ошибка при отправке ответа."
-no_active_bans = "✅ Список банов пуст."
-active_bans_header = """🚫 Активные блокировки:
+no_active_bans = "✅ Заблокированных нет."
+active_bans_header = """🚫 Заблокированные пользователи:
 """
 ban_record_entry = """{i}. {ban_id}
 Причина: {reason}
@@ -659,8 +810,7 @@ menu_btn_proposals = "📨 Предложения"
 menu_btn_reports = "⚠️ Жалобы"
 menu_btn_admins = "👥 Модераторы"
 menu_btn_addadmin = "🔗 Пригласить мод."
-menu_btn_banned = "🚫 Баны"
-menu_btn_pardon = "⚖️ Снять бан"
+menu_btn_banned = "🚫 Заблокированные"
 menu_btn_blacklist = "⛔ ЧС юзернеймов"
 menu_btn_audit = "📋 Журнал действий"
 menu_btn_reply = "✍️ Ответ на пост"
@@ -673,10 +823,6 @@ cancel_flow_btn = "❌ Отменить"
 flow_cancelled_msg = "❌ Отменено."
 user_nopostme_btn = "⛔ Запретить посты с моим юзернеймом"
 user_allowpostme_btn = "✅ Разрешить посты с моим юзернеймом"
-pardon_prompt = """⚖️ <b>Снятие бана</b>
-
-Отправьте код бана (BAN-ID), который нужно деактивировать.
-Например: <code>BAN-A1B2C3</code>"""
 reply_id_prompt = """✍️ <b>Ответ на пост</b>
 
 Отправьте ID поста в канале, на который хотите ответить.
@@ -686,7 +832,7 @@ addreplies_prompt = """➕ <b>Кнопки ответа на пост</b>
 Отправьте ссылку на пост в канале.
 Например: <code>https://t.me/c/1234567890/5</code>"""
 reply_id_invalid = "❌ Неверный ID поста. Отправьте число, например: 123"
-pardon_ban_btn = "⚖️ Снять {ban_id}"
+pardon_ban_btn = "🔓 Снять {ban_id}"
 skip_btn = "⏭ Пропустить"
 skipped_msg = "⏭ Предложение пропущено."
 media_label_text = "💬 Текст"
@@ -697,3 +843,133 @@ media_label_video_note = "📹 Видеосообщение"
 media_label_audio = "🎵 Аудио"
 media_label_voice = "🎤 Голосовое сообщение"
 media_label_sticker = "😊 Стикер"
+
+# --- Мастер-бот v2: меню, заблокированные, язык, лимиты Free ---
+mbtn_clients = "👥 Клиенты"
+mbtn_bots = "🤖 Боты"
+mbtn_banned = "🚫 Заблокированные"
+mbtn_stats = "📊 Статистика"
+mbtn_broadcast = "📣 Рассылка"
+mbtn_promo = "🎁 Промокоды"
+mbtn_proset = "⚙️ Настройки PRO"
+mbtn_cabinet = "👤 Кабинет"
+mbtn_help = "🆘 Помощь"
+mbtn_lang = "🌐 Язык"
+mbtn_refresh = "🔄 Обновить"
+mbtn_custom = "✍️ Другое"
+mbtn_cancel = "✖️ Отмена"
+mbtn_to_list = "↩️ К списку"
+mbtn_unlimited = "♾ Безлимит"
+mbtn_promo_more = "➕ Создать ещё"
+mbtn_delete_yes = "✅ Да, удалить"
+mbtn_pro_days = "📅 Изменить срок"
+mbtn_pro_price = "⭐ Изменить цену"
+mbtn_promo_kfree = "🎁 Бесплатный PRO"
+mbtn_promo_kdisc = "💰 Скидка на покупку"
+mbtn_promo_create = "➕ Создать промокод"
+mk_add_bot = "➕ Добавить бота"
+mk_my_bots = "🤖 Мои боты"
+mk_check_bot = "🔍 Проверить бота"
+mk_redeem_promo = "🎁 Активировать промокод"
+mk_buy_pro = "⭐ Купить Pro ({price} Stars)"
+mk_buy_pro_disc = "⭐ Купить Pro −{discount}% ({price} Stars)"
+mk_pro_active = "✅ Pro подписка активна"
+mk_instruction = "📚 Инструкция"
+master_owner_menu = """👑 <b>Панель управления</b>
+
+Клиентов: <b>{clients}</b> · Промокодов: <b>{promos}</b>
+Выберите раздел кнопкой ниже:"""
+master_stats_text = """📊 <b>Статистика</b>
+
+Всего клиентов: <b>{clients}</b>
+Активных ботов: <b>{bots}</b>
+Pro-клиентов: <b>{pro}</b>
+Free-клиентов: <b>{free}</b>
+Промокодов: <b>{promos}</b> (активных: <b>{active}</b>)"""
+master_welcome = """Добро пожаловать в конструктор предложек!
+Здесь вы можете создать своего бота для анонимных предложений и привязать его к вашему Telegram-каналу.
+
+🆓 Бесплатный тариф: 1 бот и до 2 модераторов, посты публикуются с вотермаркой.
+⭐ Pro: неограниченные боты и модераторы, без вотермарки.
+
+Активируйте промокод или приобретите Pro-подписку, чтобы снять ограничения."""
+master_cabinet_title = "👤 <b>Клиентский кабинет</b>\nЗдесь вы — как обычный клиент: создайте своего бота, привяжите его к каналу, активируйте промокод или купите PRO."
+master_lang_title = "🌐 <b>Выберите язык:</b>"
+master_add_bot_prompt = "Отправьте токен вашего бота, полученный от @BotFather."
+master_token_invalid = "❌ Неверный токен. Попробуйте снова."
+master_bot_saved = "✅ Бот @{username} успешно привязан!\nЯ запустил вашего бота. Перейдите в его личные сообщения (@{username}) и отправьте /start для первоначальной настройки (выбор языка и привязка канала)."
+master_bot_save_error = "❌ Ошибка сохранения: {e}"
+master_bot_limit = """❌ <b>Лимит бесплатного тарифа</b>
+
+На Free можно подключить только одного бота.
+Отвяжите текущего бота или оформите Pro — тогда количество ботов не ограничено.
+
+Промокод может выдать вам Pro бесплатно или со скидкой."""
+master_my_bots_empty = "У вас пока нет активных ботов. Нажмите «Добавить бота», чтобы создать первый."
+master_my_bots_title = "🤖 <b>Ваши активные боты:</b>\nНажмите на кнопку, чтобы отвязать бота."
+master_unbind_btn = "🗑 Отвязать @{username} (ID: {id})"
+master_unbind_ok = "✅ Бот отвязан и остановлен."
+master_unbind_ok2 = "Бот успешно отвязан. Вы можете привязать его снова в любой момент."
+master_unbind_not_yours = "❌ Ошибка: это не ваш бот."
+master_check_prompt = "🔍 <b>Проверка бота</b>\nОтправьте юзернейм бота (например, <code>@mybot</code>) для проверки.\n/cancel — отмена."
+master_check_usage = "📝 <b>Использование:</b> <code>/check &lt;username&gt;</code>\n<b>Пример:</b> <code>/check @mybot</code>"
+master_check_invalid_input = "❌ Отправьте юзернейм бота (например, @mybot)."
+master_check_invalid_username = "❌ Некорректный юзернейм. Используйте формат @username."
+master_check_ok = "✅ Бот @{username} обслуживается {service}\n📊 Статус: {status}\n📢 Канал: {channel}"
+master_check_status_ok = "✅ Настроен и работает"
+master_check_status_pending = "⏳ Зарегистрирован, настройка не завершена"
+master_check_not_serviced = "❌ Бот @{username} не обслуживается {service}"
+master_invoice_title = "Pro подписка ({days} дней)"
+master_invoice_title_disc = "Pro подписка ({days} дней) со скидкой"
+master_invoice_desc = "Снимает лимиты бесплатного тарифа (2 модератора, 1 бот) и убирает вотермарку из постов на {days} дней."
+master_invoice_desc_disc = "Снимает лимиты бесплатного тарифа (2 модератора, 1 бот) и убирает вотермарку из постов на {days} дней. Скидка {discount}% применена!"
+master_pro_active_toast = "✅ Ваша Pro-подписка активна! Вотермарки отключены, лимиты сняты."
+master_payment_success = "✅ Вы успешно приобрели Pro-подписку на {days} дней{until}!\nВсе лимиты сняты, вотермарки отключены."
+master_pro_until_suffix = " (активна до {date})"
+master_redeem_prompt = "🎁 Отправьте промокод (например, <code>PROMO-AB12CD34</code>).\n/cancel — отмена."
+master_promo_invalid_input = "❌ Отправьте промокод текстом, например PROMO-AB12CD34."
+master_redeem_free_ok = "✅ Промокод активирован! Вам выдан бесплатный PRO на {days} дней{until}. Ограничения сняты, вотермарки отключены."
+master_redeem_disc_ok = "✅ Промокод активирован! Скидка {percent}% на покупку PRO будет применена автоматически при оплате."
+master_promo_title = "🎁 <b>Промокоды</b> (стр. {page}/{total})\nНажмите на промокод для деталей."
+master_promo_empty = "🎁 <b>Промокоды</b>\n\nПромокодов пока нет.\nСоздайте первый — выдайте клиентам бесплатный PRO или скидку на покупку."
+master_promo_create_title = "🎁 <b>Создание промокода</b>\n\nКакой промокод создать?\n\n<b>🎁 Бесплатный PRO</b> — активация выдаёт PRO на N дней без оплаты.\n<b>💰 Скидка</b> — при покупке PRO цена снижается на N%."
+master_promo_days_title = "🎁 <b>Бесплатный PRO</b>\nНа сколько дней выдавать подписку?"
+master_promo_percent_title = "💰 <b>Скидка на покупку PRO</b>\nКакой процент скидки? (1–99%)"
+master_promo_uses_title = "🎁 <b>{kind}</b>\nСколько раз можно активировать промокод?"
+master_promo_days_prompt = "🎁 Отправьте число дней для бесплатного PRO (1–365).\n/cancel — отмена."
+master_promo_percent_prompt = "💰 Отправьте процент скидки (1–99).\n/cancel — отмена."
+master_promo_uses_prompt = "Отправьте лимит активаций (0 — безлимит, 1–10000).\n/cancel — отмена."
+master_promo_created = "✅ <b>Промокод создан!</b>\n\n<code>{code}</code>\n\nТип: {type}\nЛимит: {uses}\n\nОтправьте код клиентам — они активируют его кнопкой 🎁 в главном меню."
+master_promo_uses_unlimited = "безлимит"
+master_promo_uses_n = "{n} активаций"
+master_promo_type_free = "🎁 Бесплатный PRO на {days} дн."
+master_promo_type_disc = "💰 Скидка {percent}% на покупку PRO"
+master_promo_short_free = "🎁 ПРО {days}д"
+master_promo_short_disc = "💰 −{percent}%"
+master_promo_details = "🎁 <b>Промокод</b>\n\nКод: <code>{code}</code>\nТип: {type}\nАктиваций: {uses}\nСтатус: {status}\nСоздан: {created}"
+master_promo_active = "✅ Активен"
+master_promo_inactive = "⏸ Деактивирован"
+master_promo_uses_of_unlimited = "{used} из ∞ (безлимит)"
+master_promo_uses_of = "{used} из {max}"
+master_promo_deactivate = "⏸ Деактивировать"
+master_promo_activate = "▶️ Активировать"
+master_promo_del_confirm = "🗑 Удалить промокод <code>{code}</code>?\n\nВыданные по нему PRO и скидки сохранятся. Статистика активаций будет удалена."
+master_status_updated = "✅ Статус обновлён"
+master_promo_deleted = "🗑 Промокод удалён"
+master_proset_title = "⚙️ <b>Настройки PRO</b>\n\n📅 Срок подписки: <b>{days}</b> дн.\n⭐ Цена: <b>{price}</b> Stars\n\nСрок применяется при покупке PRO, при выдаче вручную и в бесплатных промокодах (свой срок задаётся при создании промокода). Скидочные промокоды уменьшают цену автоматически."
+master_prodays_title = "📅 <b>Новый срок PRO-подписки</b>\nСколько дней действует подписка?"
+master_proprice_title = "⭐ <b>Новая цена PRO</b>\nСколько Stars стоит подписка?"
+master_prodays_prompt = "📅 Отправьте срок PRO-подписки в днях (1–365).\n/cancel — отмена."
+master_proprice_prompt = "⭐ Отправьте новую цену PRO в Stars (1–250000).\n/cancel — отмена."
+master_prodays_updated = "✅ Срок PRO-подписки обновлён: {days} дн."
+master_proprice_updated = "✅ Цена PRO обновлена: {price} Stars."
+master_err_days = "❌ Отправьте число от 1 до 365."
+master_err_percent = "❌ Отправьте процент от 1 до 99."
+master_err_uses = "❌ Отправьте число от 0 (безлимит) до 10000."
+master_err_price = "❌ Отправьте цену от 1 до 250000 Stars."
+master_setplan_usage = "Использование: /setplan <user_id> <free|pro>"
+master_setplan_ok = "✅ План для {id} изменён на {plan}."
+master_bots_stopped_note = " Лишние боты остановлены: {count}."
+master_banclient_ok = "🚫 Клиент {id} забанен. Боты остановлены."
+master_banned_title = "🚫 <b>Заблокированные клиенты</b> (стр. {page}/{total})\nНажмите на клиента, чтобы мгновенно разбанить."
+master_banned_empty = "✅ Заблокированных клиентов нет."

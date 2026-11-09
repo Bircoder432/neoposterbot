@@ -322,7 +322,7 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
                         .db
                         .count_active_admins(state.bot_id, state.client_tg_id)
                         .await?;
-                    if count >= 1 {
+                    if count >= crate::db::repository::FREE_ACTIVE_MODERATORS {
                         bot.answer_callback_query(q.id.clone())
                             .text(l10n!(lang, "limit_reached_unfreeze"))
                             .await?;
@@ -598,8 +598,15 @@ pub(super) async fn handle_callback_query(bot: &Bot, q: &CallbackQuery, state: &
     }
 
     if data == "menu_pardon" {
+        // Merged into the "Banned users" menu: every ban has its own unban
+        // button there, so this entry point is no longer offered.
+        let (text, kb) = menu::build_banned_list(state, lang).await;
+        bot.edit_message_text(chat_id, message_id, text)
+            .parse_mode(teloxide::types::ParseMode::Html)
+            .reply_markup(kb)
+            .await
+            .ok();
         bot.answer_callback_query(q.id.clone()).await?;
-        menu::start_pardon_flow(bot, chat_id, user_id, state).await?;
         return Ok(());
     }
 

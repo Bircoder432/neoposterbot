@@ -1,8 +1,15 @@
 use super::models::*;
 use crate::locales::Locale;
 use anyhow::Result;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+
+/// How many non-frozen (active) moderators a Free-plan bot may have.
+/// Extra moderators are added frozen until the owner upgrades to PRO.
+pub const FREE_ACTIVE_MODERATORS: i64 = 2;
+
+/// How many active bots a Free-plan client may have.
+pub const FREE_ACTIVE_BOTS: i64 = 1;
 
 #[derive(Clone)]
 pub struct Database {
@@ -80,6 +87,23 @@ impl Database {
         Ok(())
     }
 
+    /// Sets the interface language, creating the client profile if needed.
+    /// Unlike `ensure_client`, this never resets the `banned` flag.
+    pub async fn set_client_lang_safe(&self, tg_user_id: i64, lang: Locale) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO clients (tg_user_id) VALUES ($1) ON CONFLICT (tg_user_id) DO NOTHING",
+        )
+        .bind(tg_user_id)
+        .execute(&self.pool)
+        .await?;
+        sqlx::query("UPDATE clients SET lang = $1 WHERE tg_user_id = $2")
+            .bind(lang.as_str())
+            .bind(tg_user_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn ensure_client(&self, tg_user_id: i64) -> Result<Client> {
         let client: Client = sqlx::query_as(
             "INSERT INTO clients (tg_user_id) VALUES ($1)
@@ -92,10 +116,30 @@ impl Database {
         Ok(client)
     }
 
-    pub async fn upgrade_to_pro(&self, tg_user_id: i64) -> Result<()> {
-        sqlx::query("UPDATE clients SET plan = 'pro', pro_expires_at = NOW() + INTERVAL '30 days' WHERE tg_user_id = $1")
-            .bind(tg_user_id).execute(&self.pool).await?;
-        Ok(())
+    /// Grants PRO for `days`, extending an unexpired subscription instead of
+    /// resetting it. Returns the new expiry (None if the client row is missing).
+    pub async fn grant_pro_days(
+        &self,
+        tg_user_id: i64,
+        days: i32,
+    ) -> Result<Option<DateTime<Utc>>> {
+        let row: Option<(Option<DateTime<Utc>>,)> = sqlx::query_as(
+            "UPDATE clients SET plan = 'pro', \
+             pro_expires_at = GREATEST(NOW(), COALESCE(pro_expires_at, NOW())) + make_interval(days => $2::int) \
+             WHERE tg_user_id = $1 RETURNING pro_expires_at",
+        )
+        .bind(tg_user_id)
+        .bind(days)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.and_then(|(d,)| d))
+    }
+
+    /// Upgrade after a successful payment: duration comes from the owner
+    /// setting `pro_days` (default 30).
+    pub async fn upgrade_to_pro(&self, tg_user_id: i64) -> Result<Option<DateTime<Utc>>> {
+        let days = self.get_pro_days().await?;
+        self.grant_pro_days(tg_user_id, days).await
     }
 
     pub async fn get_stats(&self) -> Result<(i64, i64)> {
@@ -110,26 +154,32 @@ impl Database {
         Ok(row)
     }
 
-    pub async fn toggle_client_plan(&self, tg_user_id: i64) -> Result<String> {
+    /// Toggles pro/free. Returns the resulting plan plus the ids of the bots
+    /// deactivated by the Free-plan limit (empty when switching to PRO).
+    pub async fn toggle_client_plan(&self, tg_user_id: i64) -> Result<(String, Vec<i32>)> {
         let client = self.get_client_by_tg_id(tg_user_id).await?;
         if let Some(client) = client {
             let is_pro = client.pro_expires_at.map_or(false, |d| d > Utc::now());
             if is_pro {
-                self.set_client_plan(tg_user_id, "free").await?;
-                Ok("free".to_string())
+                let stopped = self.set_client_plan(tg_user_id, "free").await?;
+                Ok(("free".to_string(), stopped))
             } else {
-                self.set_client_plan(tg_user_id, "pro").await?;
-                Ok("pro".to_string())
+                let stopped = self.set_client_plan(tg_user_id, "pro").await?;
+                Ok(("pro".to_string(), stopped))
             }
         } else {
             anyhow::bail!("Client not found");
         }
     }
 
-    pub async fn set_client_plan(&self, tg_user_id: i64, plan: &str) -> Result<()> {
+    /// Switches the plan. When downgrading to Free, extra bots beyond the
+    /// first are deactivated; the ids of the deactivated bots are returned so
+    /// the caller can stop their workers.
+    pub async fn set_client_plan(&self, tg_user_id: i64, plan: &str) -> Result<Vec<i32>> {
         if plan == "pro" {
-            sqlx::query("UPDATE clients SET plan = 'pro', pro_expires_at = NOW() + INTERVAL '30 days' WHERE tg_user_id = $1")
-                .bind(tg_user_id).execute(&self.pool).await?;
+            let days = self.get_pro_days().await?;
+            self.grant_pro_days(tg_user_id, days).await?;
+            Ok(Vec::new())
         } else {
             sqlx::query(
                 "UPDATE clients SET plan = 'free', pro_expires_at = NULL WHERE tg_user_id = $1",
@@ -146,8 +196,8 @@ impl Database {
             for (bot_id,) in bot_ids {
                 self.enforce_free_plan_limit(bot_id, tg_user_id).await?;
             }
+            self.enforce_free_bot_limit(tg_user_id).await
         }
-        Ok(())
     }
 
     pub async fn ban_client(&self, tg_user_id: i64) -> Result<Vec<i32>> {
@@ -485,6 +535,80 @@ impl Database {
         Ok(row.map(|(f,)| f))
     }
 
+    pub async fn count_banned_clients(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM clients WHERE banned = TRUE")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
+    pub async fn get_banned_clients_paginated(&self, offset: i64, limit: i64) -> Result<Vec<Client>> {
+        Ok(
+            sqlx::query_as(
+                "SELECT * FROM clients WHERE banned = TRUE ORDER BY created_at DESC OFFSET $1 LIMIT $2",
+            )
+            .bind(offset)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?,
+        )
+    }
+
+    /// Number of active bots owned by the client (used for the Free-plan limit).
+    pub async fn count_active_bots_by_client(&self, tg_user_id: i64) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM bots \
+             WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1) AND active = TRUE",
+        )
+        .bind(tg_user_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.0)
+    }
+
+    /// Looks up a bot row by token regardless of the active flag.
+    pub async fn find_bot_by_token(&self, token: &str) -> Result<Option<BotConfig>> {
+        Ok(
+            sqlx::query_as(
+                "SELECT b.*, c.tg_user_id as client_tg_id FROM bots b \
+                 JOIN clients c ON b.client_id = c.id WHERE b.token = $1",
+            )
+            .bind(token)
+            .fetch_optional(&self.pool)
+            .await?,
+        )
+    }
+
+    /// Free-plan bot limit: a free client may keep only ONE active bot.
+    /// Deactivates every active bot beyond the oldest one and returns the
+    /// deactivated ids. PRO clients are left untouched.
+    pub async fn enforce_free_bot_limit(&self, tg_user_id: i64) -> Result<Vec<i32>> {
+        let client = self.get_client_by_tg_id(tg_user_id).await?;
+        let is_pro = client
+            .map(|c| c.pro_expires_at.map_or(false, |d| d > Utc::now()))
+            .unwrap_or(false);
+        if is_pro {
+            return Ok(Vec::new());
+        }
+        let rows: Vec<(i32,)> = sqlx::query_as(
+            "UPDATE bots SET active = FALSE WHERE id IN (
+                SELECT id FROM bots
+                WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1)
+                  AND active = TRUE
+                  AND id NOT IN (
+                      SELECT id FROM bots
+                      WHERE client_id = (SELECT id FROM clients WHERE tg_user_id = $1)
+                        AND active = TRUE
+                      ORDER BY id ASC LIMIT 1
+                  )
+            ) RETURNING id",
+        )
+        .bind(tg_user_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(|(id,)| id).collect())
+    }
+
     pub async fn count_active_admins(&self, bot_id: i32, owner_id: i64) -> Result<i64> {
         let row: (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM admins WHERE bot_id = $1 AND frozen = FALSE AND user_id != $2",
@@ -500,7 +624,7 @@ impl Database {
         let plan = self.get_client_plan_by_bot_id(bot_id).await?;
         if plan == "free" {
             let active_count = self.count_active_admins(bot_id, owner_id).await?;
-            if active_count > 1 {
+            if active_count > FREE_ACTIVE_MODERATORS {
                 self.enforce_free_plan_limit(bot_id, owner_id).await?;
             }
         }
@@ -517,11 +641,12 @@ impl Database {
                 WHERE bot_id = $1
                 AND user_id != $2
                 ORDER BY id ASC
-                LIMIT 1
+                LIMIT $3
             )",
         )
         .bind(bot_id)
         .bind(owner_id)
+        .bind(FREE_ACTIVE_MODERATORS)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -716,6 +841,250 @@ impl Database {
         .bind(enabled)
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    // ==================== Service settings (owner-configurable) ====================
+
+    pub async fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM service_settings WHERE key = $1")
+                .bind(key)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.map(|(v,)| v))
+    }
+
+    pub async fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO service_settings (key, value, updated_at) VALUES ($1, $2, NOW()) \
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// PRO subscription duration in days (owner setting, default 30).
+    pub async fn get_pro_days(&self) -> Result<i32> {
+        let v = self.get_setting("pro_days").await?;
+        Ok(v
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(30)
+            .clamp(1, 365))
+    }
+
+    /// PRO price in Telegram Stars (owner setting, default 100).
+    pub async fn get_pro_price(&self) -> Result<i64> {
+        let v = self.get_setting("pro_price_stars").await?;
+        Ok(v
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(100)
+            .clamp(1, 250_000))
+    }
+
+    // ==================== Promo codes ====================
+
+    pub async fn create_promo_code(
+        &self,
+        kind: &str,
+        param: i32,
+        max_uses: i32,
+        created_by: i64,
+    ) -> Result<PromoCode> {
+        let code = loop {
+            let candidate = format!(
+                "PROMO-{}",
+                &uuid::Uuid::new_v4().simple().to_string().to_uppercase()[..8]
+            );
+            let exists: Option<(i32,)> =
+                sqlx::query_as("SELECT id FROM promo_codes WHERE code = $1")
+                    .bind(&candidate)
+                    .fetch_optional(&self.pool)
+                    .await?;
+            if exists.is_none() {
+                break candidate;
+            }
+        };
+        let promo: PromoCode = sqlx::query_as(
+            "INSERT INTO promo_codes (code, kind, param, max_uses, created_by) \
+             VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        )
+        .bind(&code)
+        .bind(kind)
+        .bind(param)
+        .bind(max_uses)
+        .bind(created_by)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(promo)
+    }
+
+    pub async fn count_promo_codes(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM promo_codes")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
+    pub async fn count_active_promos(&self) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM promo_codes WHERE active = TRUE")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.0)
+    }
+
+    pub async fn get_promo_codes_paginated(&self, offset: i64, limit: i64) -> Result<Vec<PromoCode>> {
+        Ok(
+            sqlx::query_as("SELECT * FROM promo_codes ORDER BY created_at DESC OFFSET $1 LIMIT $2")
+                .bind(offset)
+                .bind(limit)
+                .fetch_all(&self.pool)
+                .await?,
+        )
+    }
+
+    pub async fn get_promo_by_id(&self, promo_id: i32) -> Result<Option<PromoCode>> {
+        Ok(sqlx::query_as("SELECT * FROM promo_codes WHERE id = $1")
+            .bind(promo_id)
+            .fetch_optional(&self.pool)
+            .await?)
+    }
+
+    pub async fn set_promo_active(&self, promo_id: i32, active: bool) -> Result<()> {
+        sqlx::query("UPDATE promo_codes SET active = $2 WHERE id = $1")
+            .bind(promo_id)
+            .bind(active)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_promo_code(&self, promo_id: i32) -> Result<()> {
+        sqlx::query("DELETE FROM promo_codes WHERE id = $1")
+            .bind(promo_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Validates and applies a promo code for a client, all in one transaction.
+    /// For `free_pro` codes grants PRO for `param` days; for `discount` codes
+    /// stores a pending discount applied at the next PRO purchase.
+    pub async fn redeem_promo_code(
+        &self,
+        tg_user_id: i64,
+        code_str: &str,
+    ) -> Result<RedeemedPromoInfo> {
+        // Accept both "PROMO-AB12CD34" and the bare "AB12CD34" suffix.
+        let raw = code_str.trim().to_uppercase();
+        let normalized = if raw.starts_with("PROMO-") {
+            raw
+        } else {
+            format!("PROMO-{}", raw)
+        };
+        let promo: PromoCode = sqlx::query_as("SELECT * FROM promo_codes WHERE code = $1")
+            .bind(&normalized)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Промокод не найден. Проверьте написание."))?;
+        if !promo.active {
+            anyhow::bail!("Этот промокод деактивирован.");
+        }
+        if promo.max_uses > 0 && promo.used_count >= promo.max_uses {
+            anyhow::bail!("Лимит активаций этого промокода уже исчерпан.");
+        }
+        let already: Option<(i32,)> = sqlx::query_as(
+            "SELECT id FROM promo_redemptions WHERE promo_id = $1 AND client_tg_id = $2",
+        )
+        .bind(promo.id)
+        .bind(tg_user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        if already.is_some() {
+            anyhow::bail!("Вы уже активировали этот промокод.");
+        }
+
+        let mut tx = self.pool.begin().await?;
+        let updated: Option<PromoCode> = sqlx::query_as(
+            "UPDATE promo_codes SET used_count = used_count + 1 \
+             WHERE id = $1 AND active = TRUE AND (max_uses = 0 OR used_count < max_uses) RETURNING *",
+        )
+        .bind(promo.id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if updated.is_none() {
+            anyhow::bail!("Промокод недоступен.");
+        }
+        let ins = sqlx::query(
+            "INSERT INTO promo_redemptions (promo_id, client_tg_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(promo.id)
+        .bind(tg_user_id)
+        .execute(&mut *tx)
+        .await?;
+        if ins.rows_affected() == 0 {
+            anyhow::bail!("Вы уже активировали этот промокод.");
+        }
+
+        let mut new_until: Option<DateTime<Utc>> = None;
+        if promo.kind == "free_pro" {
+            let row: Option<(Option<DateTime<Utc>>,)> = sqlx::query_as(
+                "UPDATE clients SET plan = 'pro', \
+                 pro_expires_at = GREATEST(NOW(), COALESCE(pro_expires_at, NOW())) + make_interval(days => $2::int) \
+                 WHERE tg_user_id = $1 RETURNING pro_expires_at",
+            )
+            .bind(tg_user_id)
+            .bind(promo.param)
+            .fetch_optional(&mut *tx)
+            .await?;
+            new_until = row.and_then(|(d,)| d);
+            if new_until.is_none() {
+                anyhow::bail!("Профиль не найден. Нажмите /start и попробуйте снова.");
+            }
+        } else if promo.kind == "discount" {
+            sqlx::query(
+                "INSERT INTO client_discounts (client_tg_id, discount_percent, promo_id) \
+                 VALUES ($1, $2, $3) \
+                 ON CONFLICT (client_tg_id) DO UPDATE SET discount_percent = $2, promo_id = $3, created_at = NOW()",
+            )
+            .bind(tg_user_id)
+            .bind(promo.param)
+            .bind(promo.id)
+            .execute(&mut *tx)
+            .await?;
+        } else {
+            anyhow::bail!("Неизвестный тип промокода.");
+        }
+        tx.commit().await?;
+
+        Ok(RedeemedPromoInfo {
+            kind: promo.kind.clone(),
+            param: promo.param,
+            new_pro_until: new_until,
+        })
+    }
+
+    // ==================== Pending discounts ====================
+
+    pub async fn get_pending_discount(&self, tg_user_id: i64) -> Result<Option<PendingDiscount>> {
+        Ok(
+            sqlx::query_as(
+                "SELECT discount_percent, promo_id FROM client_discounts WHERE client_tg_id = $1",
+            )
+            .bind(tg_user_id)
+            .fetch_optional(&self.pool)
+            .await?,
+        )
+    }
+
+    pub async fn clear_pending_discount(&self, tg_user_id: i64) -> Result<()> {
+        sqlx::query("DELETE FROM client_discounts WHERE client_tg_id = $1")
+            .bind(tg_user_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }

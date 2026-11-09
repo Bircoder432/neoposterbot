@@ -254,7 +254,12 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
     }
     let ban_id = args.trim();
     if ban_id.is_empty() {
-        bot.send_message(msg.chat.id, l10n!(lang, "pardon_usage"))
+        // No BAN-ID given: open the merged "Banned users" menu instead of
+        // demanding a code - every ban there has its own one-tap unban button.
+        let (text, kb) = menu::build_banned_list(state, lang).await;
+        bot.send_message(msg.chat.id, text)
+            .parse_mode(ParseMode::Html)
+            .reply_markup(kb)
             .await?;
         return Ok(());
     }

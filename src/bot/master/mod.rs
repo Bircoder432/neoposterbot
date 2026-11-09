@@ -23,6 +23,19 @@ pub enum FlowState {
     AwaitingToken,
     AwaitingBotCheck,
     AwaitingBroadcast,
+    /// Any client: waiting for a promo code to redeem.
+    AwaitingPromoRedeem,
+    /// Owner: custom day count for a free-PRO promo code.
+    AwaitingPromoDays,
+    /// Owner: custom percent for a discount promo code.
+    AwaitingPromoDiscount,
+    /// Owner: custom activation limit for a promo code.
+    /// `kind` is the short tag: "free" | "disc"; `param` is days or percent.
+    AwaitingPromoUses { kind: String, param: i32 },
+    /// Owner: new PRO subscription duration (days).
+    AwaitingProDays,
+    /// Owner: new PRO price (Stars).
+    AwaitingProPrice,
 }
 
 pub async fn run_master_bot(state: Arc<MasterState>) -> Result<()> {

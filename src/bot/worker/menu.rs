@@ -35,10 +35,9 @@ pub(super) async fn build_main_menu(
                 btn(lang, "menu_btn_admins", "menu_admins"),
                 btn(lang, "menu_btn_addadmin", "menu_addadmin"),
             ],
-            vec![
-                btn(lang, "menu_btn_banned", "menu_banned"),
-                btn(lang, "menu_btn_pardon", "menu_pardon"),
-            ],
+            // Merged menu: the ban list itself carries an unban button per ban,
+            // so a separate "pardon by code" entry is no longer needed.
+            vec![btn(lang, "menu_btn_banned", "menu_banned")],
             vec![
                 btn(lang, "menu_btn_blacklist", "menu_blacklist"),
                 btn(lang, "menu_btn_audit", "menu_audit"),
@@ -68,10 +67,8 @@ pub(super) async fn build_main_menu(
                 btn(lang, "menu_btn_proposals", "menu_proposals"),
                 btn(lang, "menu_btn_reports", "menu_reports"),
             ],
-            vec![
-                btn(lang, "menu_btn_banned", "menu_banned"),
-                btn(lang, "menu_btn_pardon", "menu_pardon"),
-            ],
+            // Merged menu: unban buttons live right on the ban list.
+            vec![btn(lang, "menu_btn_banned", "menu_banned")],
             vec![
                 btn(lang, "menu_btn_reply", "menu_reply"),
                 btn(lang, "menu_btn_addreplies", "menu_addreplies"),
@@ -148,6 +145,8 @@ pub(super) async fn open_reports(bot: &Bot, chat_id: ChatId, user_id: i64, state
 }
 
 /// Active bans list with a per-ban "pardon" inline button.
+/// This is the merged "Banned users" menu: every entry carries its own
+/// one-tap unban button, so no separate pardon flow is needed.
 pub(super) async fn build_banned_list(state: &WorkerState, lang: Locale) -> (String, InlineKeyboardMarkup) {
     let records = state
         .db
@@ -287,27 +286,6 @@ async fn send_input_prompt(bot: &Bot, chat_id: ChatId, lang: Locale, key: &str) 
     Ok(())
 }
 
-pub(super) async fn start_pardon_flow(
-    bot: &Bot,
-    chat_id: ChatId,
-    user_id: i64,
-    state: &WorkerState,
-) -> R {
-    let lang = state.db.get_language(state.bot_id).await?;
-    if !ensure_moderator(bot, chat_id, user_id, state, lang).await? {
-        return Ok(());
-    }
-    state.user_states.insert(
-        user_id,
-        UserStateEntry {
-            state: "await_pardon".to_string(),
-            temp_target_id: 0,
-            proposal_id: 0,
-        },
-    );
-    send_input_prompt(bot, chat_id, lang, "pardon_prompt").await
-}
-
 pub(super) async fn start_reply_flow(
     bot: &Bot,
     chat_id: ChatId,
@@ -378,21 +356,6 @@ pub(super) async fn pardon_core(
         }
     }
     Ok(())
-}
-
-pub(super) async fn handle_pardon_input(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
-    let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_id).await?;
-    let ban_id = match msg.text().map(|t| t.trim()).filter(|t| !t.is_empty()) {
-        Some(t) => t.to_string(),
-        None => {
-            // Not a text message - keep the flow and remind the format.
-            send_input_prompt(bot, msg.chat.id, lang, "pardon_prompt").await?;
-            return Ok(());
-        }
-    };
-    state.user_states.remove(&user_id);
-    pardon_core(bot, msg.chat.id, user_id, &ban_id, state, lang).await
 }
 
 pub(super) async fn handle_reply_id_input(bot: &Bot, msg: &Message, state: &WorkerState) -> R {

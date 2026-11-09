@@ -3,7 +3,7 @@ use super::utils;
 use crate::bot::media::escape_html;
 use crate::bot::worker::WorkerState;
 use crate::db::models::Admin;
-use crate::db::repository::Database;
+use crate::db::repository::{Database, FREE_ACTIVE_MODERATORS};
 use crate::l10n;
 use crate::locales::Locale;
 use teloxide::prelude::*;
@@ -31,7 +31,9 @@ pub(super) async fn handle_admin_invite(
                 .db
                 .count_active_admins(state.bot_id, state.client_tg_id)
                 .await?;
-            let frozen = plan == "free" && admin_count >= 1;
+            // Free plan: the first FREE_ACTIVE_MODERATORS moderators work,
+            // everyone after them is added frozen until the owner buys PRO.
+            let frozen = plan == "free" && admin_count >= FREE_ACTIVE_MODERATORS;
             let user_name = utils::resolve_user_name(bot, user_id).await;
             state
                 .db

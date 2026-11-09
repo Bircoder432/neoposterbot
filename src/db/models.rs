@@ -109,3 +109,35 @@ pub struct BannedUsername {
     pub bot_id: i32,
     pub username: String,
 }
+
+#[derive(Debug, Clone, FromRow)]
+pub struct PromoCode {
+    pub id: i32,
+    pub code: String,
+    pub kind: String,      // 'free_pro' | 'discount'
+    pub param: i32,        // days for free_pro, percent for discount
+    pub max_uses: i32,     // 0 = unlimited
+    pub used_count: i32,
+    pub created_by: i64,
+    pub created_at: DateTime<Utc>,
+    pub active: bool,
+}
+
+impl PromoCode {
+    pub fn is_free_pro(&self) -> bool {
+        self.kind == "free_pro"
+    }
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct PendingDiscount {
+    pub discount_percent: i32,
+    pub promo_id: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RedeemedPromoInfo {
+    pub kind: String, // 'free_pro' | 'discount'
+    pub param: i32,
+    pub new_pro_until: Option<DateTime<Utc>>,
+}

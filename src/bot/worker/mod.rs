@@ -129,9 +129,6 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
             "ban_reason" => {
                 return proposals::handle_send_ban_reason(bot, msg, state, &entry).await;
             }
-            "await_pardon" => {
-                return menu::handle_pardon_input(bot, msg, state).await;
-            }
             "await_reply_id" => {
                 return menu::handle_reply_id_input(bot, msg, state).await;
             }
