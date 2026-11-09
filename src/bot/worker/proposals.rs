@@ -184,6 +184,34 @@ fn parse_and_strip_tme_link(
     None
 }
 
+/// Puts a user into "reply mode" for a channel post (shared by the deep
+/// link, the /reply command and the menu flow).
+pub(super) async fn enter_reply_mode(
+    bot: &Bot,
+    chat_id: ChatId,
+    user_id: i64,
+    state: &WorkerState,
+    parent_id: i64,
+    lang: Locale,
+) -> R {
+    state.user_states.insert(
+        user_id,
+        UserStateEntry {
+            state: "reply_mode".to_string(),
+            temp_target_id: parent_id,
+            proposal_id: 0,
+        },
+    );
+    let kb = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+        l10n!(lang, "cancel_flow_btn"),
+        "flowcancel",
+    )]]);
+    bot.send_message(chat_id, l10n!(lang, "send_reply_to_post"))
+        .reply_markup(kb)
+        .await?;
+    Ok(())
+}
+
 pub(super) async fn handle_reply_content(
     bot: &Bot,
     msg: &Message,
@@ -362,7 +390,12 @@ pub(super) async fn show_next_proposal(
 ) -> R {
     match state.proposals.pop_next().await {
         None => {
+            let kb = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+                l10n!(lang, "back_to_menu_btn"),
+                "menu_main",
+            )]]);
             bot.send_message(chat_id, l10n!(lang, "no_new_proposals"))
+                .reply_markup(kb)
                 .await?;
         }
         Some(proposal) => {
@@ -389,16 +422,36 @@ pub(super) async fn show_next_proposal(
                 id = first.id,
                 date = first.created_at.format("%d.%m.%Y %H:%M").to_string()
             );
-            let kb = InlineKeyboardMarkup::new(vec![vec![
+            let id = first.id;
+            let remaining = state.proposals.pending_count().await;
+            let mut rows = vec![vec![
                 InlineKeyboardButton::callback(
                     l10n!(lang, "approve_btn"),
-                    format!("approve_{}", first.id),
+                    format!("approve_{id}"),
                 ),
                 InlineKeyboardButton::callback(
                     l10n!(lang, "reject_btn"),
-                    format!("reject_{}", first.id),
+                    format!("reject_{id}"),
                 ),
-            ]]);
+            ]];
+            if remaining > 0 {
+                rows.push(vec![
+                    InlineKeyboardButton::callback(
+                        l10n!(lang, "skip_btn"),
+                        format!("skip_{id}"),
+                    ),
+                    InlineKeyboardButton::callback(
+                        l10n!(lang, "back_to_menu_btn"),
+                        "menu_main",
+                    ),
+                ]);
+            } else {
+                rows.push(vec![InlineKeyboardButton::callback(
+                    l10n!(lang, "back_to_menu_btn"),
+                    "menu_main",
+                )]);
+            }
+            let kb = InlineKeyboardMarkup::new(rows);
             bot.send_message(chat_id, text).reply_markup(kb).await?;
         }
     }

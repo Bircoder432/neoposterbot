@@ -1,14 +1,14 @@
 use super::admins;
+use super::menu;
 use super::proposals;
 use super::reports;
 use super::utils;
-use crate::bot::media;
-use crate::bot::worker::{UserStateEntry, WorkerState};
+use crate::bot::worker::WorkerState;
 use crate::hashing::hash_user_id;
 use crate::l10n;
 use crate::locales::Locale;
 use teloxide::prelude::*;
-use teloxide::types::MessageId;
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, ParseMode};
 
 type R = anyhow::Result<()>;
 
@@ -45,12 +45,19 @@ pub(super) async fn dispatch_command(bot: &Bot, msg: &Message, state: &WorkerSta
 async fn handle_cancel(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-    if state.user_states.remove(&user_id).is_some() {
-        bot.send_message(msg.chat.id, l10n!(lang, "mode_cancelled"))
-            .await?;
-    } else {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_active_mode"))
-            .await?;
+    match state.user_states.remove(&user_id) {
+        Some((_, entry)) => {
+            if entry.state == "reason" || entry.state == "ban_reason" {
+                // Drop the rejected proposal, same as the "Next" button.
+                state.proposals.discard_rejected(entry.proposal_id).await;
+            }
+            bot.send_message(msg.chat.id, l10n!(lang, "mode_cancelled"))
+                .await?;
+        }
+        None => {
+            bot.send_message(msg.chat.id, l10n!(lang, "no_active_mode"))
+                .await?;
+        }
     }
     Ok(())
 }
@@ -69,11 +76,23 @@ async fn handle_set_language(bot: &Bot, msg: &Message, state: &WorkerState, args
             let mut cfg = state.config.write().await;
             cfg.lang = new_lang.as_str().to_string();
             drop(cfg);
-            bot.send_message(msg.chat.id, l10n!(lang, "lang_updated"))
+            bot.send_message(msg.chat.id, l10n!(new_lang, "lang_updated"))
                 .await?;
         }
         None => {
-            bot.send_message(msg.chat.id, l10n!(lang, "lang_invalid"))
+            // Offer the language picker instead of demanding a command argument.
+            let kb = InlineKeyboardMarkup::new(vec![
+                vec![
+                    InlineKeyboardButton::callback("🇷🇺 Русский", "setlang_ru"),
+                    InlineKeyboardButton::callback("🇬🇧 English", "setlang_en"),
+                ],
+                vec![InlineKeyboardButton::callback(
+                    l10n!(lang, "back_to_menu_btn"),
+                    "menu_main",
+                )],
+            ]);
+            bot.send_message(msg.chat.id, l10n!(lang, "lang_choose_title"))
+                .reply_markup(kb)
                 .await?;
         }
     }
@@ -102,17 +121,15 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
     if let Some(parent_id_str) = args.strip_prefix("reply_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
-                state.user_states.insert(
+                return proposals::enter_reply_mode(
+                    bot,
+                    chat_id,
                     user_id,
-                    UserStateEntry {
-                        state: "reply_mode".to_string(),
-                        temp_target_id: channel_msg_id as i64,
-                        proposal_id: 0,
-                    },
-                );
-                bot.send_message(chat_id, l10n!(lang, "send_reply_to_post"))
-                    .await?;
-                return Ok(());
+                    state,
+                    channel_msg_id as i64,
+                    lang,
+                )
+                .await;
             }
         }
         bot.send_message(chat_id, l10n!(lang, "invalid_reply_link"))
@@ -123,17 +140,15 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
     if let Some(parent_id_str) = args.strip_prefix("report_") {
         if let Ok(channel_msg_id) = parent_id_str.parse::<i32>() {
             if channel_msg_id > 0 {
-                state.user_states.insert(
+                return reports::enter_report_mode(
+                    bot,
+                    chat_id,
                     user_id,
-                    UserStateEntry {
-                        state: "report_mode".to_string(),
-                        temp_target_id: channel_msg_id as i64,
-                        proposal_id: 0,
-                    },
-                );
-                bot.send_message(chat_id, l10n!(lang, "send_report_to_post"))
-                    .await?;
-                return Ok(());
+                    state,
+                    channel_msg_id as i64,
+                    lang,
+                )
+                .await;
             }
         }
         bot.send_message(chat_id, l10n!(lang, "invalid_reply_link"))
@@ -141,18 +156,23 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
         return Ok(());
     }
 
-    if state.client_tg_id == user_id {
-        bot.send_message(chat_id, l10n!(lang, "owner_panel"))
-            .await?;
-    } else if utils::is_authorized(state, user_id).await? {
-        if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-            bot.send_message(chat_id, l10n!(lang, "mod_frozen_panel"))
-                .await?;
-        } else {
-            bot.send_message(chat_id, l10n!(lang, "mod_panel")).await?;
-        }
+    if state.client_tg_id == user_id || utils::is_authorized(state, user_id).await? {
+        // Button panel (owner / moderator / frozen moderator variants).
+        menu::show_main_menu(bot, chat_id, user_id, state, lang).await?;
     } else {
-        bot.send_message(chat_id, l10n!(lang, "welcome")).await?;
+        let kb = InlineKeyboardMarkup::new(vec![
+            vec![InlineKeyboardButton::callback(
+                l10n!(lang, "user_nopostme_btn"),
+                "menu_nopostme",
+            )],
+            vec![InlineKeyboardButton::callback(
+                l10n!(lang, "user_allowpostme_btn"),
+                "menu_allowpostme",
+            )],
+        ]);
+        bot.send_message(chat_id, l10n!(lang, "welcome"))
+            .reply_markup(kb)
+            .await?;
     }
     Ok(())
 }
@@ -160,14 +180,7 @@ async fn handle_start(bot: &Bot, msg: &Message, state: &WorkerState, args: &str)
 async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
-            .await?;
-        return Ok(());
-    }
-    if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
-            .await?;
+    if !menu::ensure_moderator(bot, msg.chat.id, user_id, state, lang).await? {
         return Ok(());
     }
     let channel_msg_id: i32 = match args.trim().parse() {
@@ -178,49 +191,25 @@ async fn handle_reply_command(bot: &Bot, msg: &Message, state: &WorkerState, arg
             return Ok(());
         }
     };
-    state.user_states.insert(
+    proposals::enter_reply_mode(
+        bot,
+        msg.chat.id,
         user_id,
-        UserStateEntry {
-            state: "reply_mode".to_string(),
-            temp_target_id: channel_msg_id as i64,
-            proposal_id: 0,
-        },
-    );
-    bot.send_message(msg.chat.id, l10n!(lang, "send_reply_to_post"))
-        .await?;
-    Ok(())
+        state,
+        channel_msg_id as i64,
+        lang,
+    )
+    .await
 }
 
 async fn handle_proposals(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_id).await?;
-    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
-            .await?;
-        return Ok(());
-    }
-    if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
-            .await?;
-        return Ok(());
-    }
-    proposals::show_next_proposal(bot, msg.chat.id, state, lang).await
+    menu::open_proposals(bot, msg.chat.id, user_id, state).await
 }
 
 async fn handle_reports(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
-    let lang = state.db.get_language(state.bot_id).await?;
-    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
-            .await?;
-        return Ok(());
-    }
-    if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
-            .await?;
-        return Ok(());
-    }
-    reports::show_next_report(bot, msg.chat.id, state, lang).await
+    menu::open_reports(bot, msg.chat.id, user_id, state).await
 }
 
 async fn handle_audit(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
@@ -231,46 +220,10 @@ async fn handle_audit(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
             .await?;
         return Ok(());
     }
-    let logs = state.db.get_audit_logs(state.bot_id, 20).await?;
-    if logs.is_empty() {
-        bot.send_message(msg.chat.id, l10n!(lang, "audit_empty"))
-            .await?;
-        return Ok(());
-    }
-    let mut text = l10n!(lang, "audit_title");
-    for (i, log) in logs.iter().enumerate() {
-        let date_str = log.created_at.format("%d.%m.%Y %H:%M").to_string();
-        let action_key = match log.action.as_str() {
-            "approve" => "audit_action_approve",
-            "reject" => "audit_action_reject",
-            "ban" => "audit_action_ban",
-            "pardon" => "audit_action_pardon",
-            "freeze" => "audit_action_freeze",
-            "unfreeze" => "audit_action_unfreeze",
-            "add_admin" => "audit_action_add_admin",
-            "remove_admin" => "audit_action_remove_admin",
-            "dismiss_report" => "audit_action_dismiss_report",
-            "ban_reporter" => "audit_action_ban_reporter",
-            "delete_post" => "audit_action_delete_post",
-            _ => "",
-        };
-        let action_text = if action_key.is_empty() {
-            log.action.clone()
-        } else {
-            l10n!(lang, action_key)
-        };
-        text.push_str(&l10n!(
-            lang,
-            "audit_entry",
-            i = i + 1,
-            date = date_str,
-            admin = log.admin_name,
-            action = action_text,
-            target = log.target
-        ));
-    }
+    let (text, kb) = menu::build_audit(state, lang).await;
     bot.send_message(msg.chat.id, text)
-        .parse_mode(teloxide::types::ParseMode::Html)
+        .parse_mode(ParseMode::Html)
+        .reply_markup(kb)
         .await?;
     Ok(())
 }
@@ -285,20 +238,10 @@ async fn handle_blacklist(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
         return Ok(());
     }
 
-    let usernames = state.db.get_banned_usernames(state.bot_id).await?;
-    if usernames.is_empty() {
-        bot.send_message(msg.chat.id, l10n!(lang, "blacklist_empty"))
-            .await?;
-        return Ok(());
-    }
-
-    let mut text = l10n!(lang, "blacklist_title");
-    for uname in usernames {
-        text.push_str(&l10n!(lang, "blacklist_entry", username = uname));
-    }
-
+    let (text, kb) = menu::build_blacklist(state, lang).await;
     bot.send_message(msg.chat.id, text)
-        .parse_mode(teloxide::types::ParseMode::Html)
+        .parse_mode(ParseMode::Html)
+        .reply_markup(kb)
         .await?;
     Ok(())
 }
@@ -306,14 +249,7 @@ async fn handle_blacklist(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
 async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
-            .await?;
-        return Ok(());
-    }
-    if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
-            .await?;
+    if !menu::ensure_moderator(bot, msg.chat.id, user_id, state, lang).await? {
         return Ok(());
     }
     let ban_id = args.trim();
@@ -322,87 +258,27 @@ async fn handle_pardon(bot: &Bot, msg: &Message, state: &WorkerState, args: &str
             .await?;
         return Ok(());
     }
-    match state.db.pardon_by_ban_id(state.bot_id, ban_id).await? {
-        None => {
-            bot.send_message(msg.chat.id, l10n!(lang, "ban_not_found"))
-                .await?;
-        }
-        Some(record) => {
-            let admin_name = utils::get_admin_name(state, user_id).await;
-            let _ = state
-                .db
-                .log_action(state.bot_id, user_id, &admin_name, "pardon", ban_id)
-                .await;
-            bot.send_message(
-                msg.chat.id,
-                l10n!(lang, "ban_deactivated", ban_id = record.ban_id),
-            )
-            .await?;
-        }
-    }
-    Ok(())
+    menu::pardon_core(bot, msg.chat.id, user_id, ban_id, state, lang).await
 }
 
 async fn handle_banned(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
-            .await?;
+    if !menu::ensure_moderator(bot, msg.chat.id, user_id, state, lang).await? {
         return Ok(());
     }
-    if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
-            .await?;
-        return Ok(());
-    }
-    let records = state.db.get_active_ban_records(state.bot_id).await?;
-    if records.is_empty() {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_active_bans"))
-            .await?;
-        return Ok(());
-    }
-    let mut list = l10n!(lang, "active_bans_header");
-    for (i, record) in records.iter().enumerate() {
-        list.push_str(&l10n!(
-            lang,
-            "ban_record_entry",
-            i = i + 1,
-            ban_id = record.ban_id,
-            reason = record.reason,
-            date = record.created_at.format("%d.%m.%Y %H:%M").to_string()
-        ));
-    }
-    bot.send_message(msg.chat.id, list).await?;
+    let (text, kb) = menu::build_banned_list(state, lang).await;
+    bot.send_message(msg.chat.id, text)
+        .parse_mode(ParseMode::Html)
+        .reply_markup(kb)
+        .await?;
     Ok(())
-}
-
-fn parse_post_link(link: &str) -> Option<i32> {
-    let lower = link.to_lowercase();
-    let pos = lower.find("t.me/")?;
-    let path = &lower[pos + 5..];
-    let path = path.split('?').next().unwrap_or(path);
-    let parts: Vec<&str> = path.split('/').collect();
-    if parts.len() >= 3 && parts[0] == "c" {
-        parts[2].parse::<i32>().ok()
-    } else if parts.len() >= 2 && parts[0] != "c" {
-        parts[1].parse::<i32>().ok()
-    } else {
-        None
-    }
 }
 
 async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args: &str) -> R {
     let user_id = msg.from.as_ref().unwrap().id.0 as i64;
     let lang = state.db.get_language(state.bot_id).await?;
-    if let Some(true) = state.db.get_admin_status(state.bot_id, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "mod_frozen_action"))
-            .await?;
-        return Ok(());
-    }
-    if !utils::is_authorized(state, user_id).await? {
-        bot.send_message(msg.chat.id, l10n!(lang, "no_access"))
-            .await?;
+    if !menu::ensure_moderator(bot, msg.chat.id, user_id, state, lang).await? {
         return Ok(());
     }
     let link = args.trim();
@@ -411,80 +287,7 @@ async fn handle_add_replies(bot: &Bot, msg: &Message, state: &WorkerState, args:
             .await?;
         return Ok(());
     }
-    let channel_msg_id = match parse_post_link(link) {
-        Some(id) if id > 0 => id,
-        _ => {
-            bot.send_message(msg.chat.id, l10n!(lang, "addreplies_invalid_link"))
-                .await?;
-            return Ok(());
-        }
-    };
-    let cfg = state.config.read().await;
-    let channel_id = cfg.channel_id;
-    let bot_username = cfg.bot_username.clone();
-    drop(cfg);
-    let forwarded = bot
-        .forward_message(
-            ChatId(user_id),
-            ChatId(channel_id),
-            MessageId(channel_msg_id),
-        )
-        .await;
-    let forwarded = match forwarded {
-        Ok(m) => m,
-        Err(e) => {
-            bot.send_message(
-                msg.chat.id,
-                l10n!(lang, "addreplies_failed_get", e = e.to_string()),
-            )
-            .await?;
-            return Ok(());
-        }
-    };
-    let current_text = forwarded
-        .text()
-        .map(|s| s.to_string())
-        .or_else(|| forwarded.caption().map(|s| s.to_string()))
-        .unwrap_or_default();
-    let _ = bot.delete_message(ChatId(user_id), forwarded.id).await;
-    let has_reply = current_text.contains("start=reply_");
-    let has_report = current_text.contains("start=report_");
-    if has_reply && has_report {
-        bot.send_message(msg.chat.id, l10n!(lang, "addreplies_already_exists"))
-            .await?;
-        return Ok(());
-    }
-    let mut new_text = current_text;
-    if !has_reply {
-        let reply_text = l10n!(lang, "reply_link_text");
-        let reply_link = format!(
-            "\n<a href=\"https://t.me/{bot_username}?start=reply_{channel_msg_id}\">{reply_text}</a>"
-        );
-        new_text.push_str(&reply_link);
-    }
-    if !has_report {
-        let report_text = l10n!(lang, "report_link_text");
-        let report_link = format!(
-            " | <a href=\"https://t.me/{bot_username}?start=report_{channel_msg_id}\">{report_text}</a>"
-        );
-        new_text.push_str(&report_link);
-    }
-    match media::add_reply_to_channel_post(bot, channel_id, channel_msg_id, &new_text, &forwarded)
-        .await
-    {
-        Ok(()) => {
-            bot.send_message(msg.chat.id, l10n!(lang, "addreplies_success"))
-                .await?;
-        }
-        Err(e) => {
-            bot.send_message(
-                msg.chat.id,
-                l10n!(lang, "addreplies_failed_edit", e = e.to_string()),
-            )
-            .await?;
-        }
-    }
-    Ok(())
+    menu::add_replies_core(bot, msg.chat.id, user_id, link, state, lang).await
 }
 
 async fn handle_nopostme(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
@@ -534,43 +337,4 @@ async fn handle_allowpostme(bot: &Bot, msg: &Message, state: &WorkerState) -> R 
             .await?;
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_post_link_public_channel() {
-        assert_eq!(
-            parse_post_link("https://t.me/my_awesome_channel/42"),
-            Some(42)
-        );
-        assert_eq!(parse_post_link("http://t.me/channel/100"), Some(100));
-        assert_eq!(parse_post_link("t.me/channel/999"), Some(999));
-    }
-
-    #[test]
-    fn test_parse_post_link_private_channel() {
-        assert_eq!(parse_post_link("https://t.me/c/1234567890/55"), Some(55));
-        assert_eq!(parse_post_link("https://t.me/c/9876543210/1"), Some(1));
-    }
-
-    #[test]
-    fn test_parse_post_link_with_query_params() {
-        assert_eq!(parse_post_link("https://t.me/channel/42?single"), Some(42));
-        assert_eq!(
-            parse_post_link("https://t.me/c/123/10?comment=123"),
-            Some(10)
-        );
-    }
-
-    #[test]
-    fn test_parse_post_link_invalid() {
-        assert_eq!(parse_post_link("not a link at all"), None);
-        assert_eq!(parse_post_link("https://t.me/username"), None);
-        assert_eq!(parse_post_link("https://t.me/c/12345"), None);
-        assert_eq!(parse_post_link("https://vk.com/wall123_456"), None);
-        assert_eq!(parse_post_link(""), None);
-    }
 }

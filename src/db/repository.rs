@@ -667,4 +667,55 @@ impl Database {
                 .await?;
         Ok(rows.into_iter().map(|(u,)| u).collect())
     }
+
+    /// Returns (proposals_enabled, reports_enabled). Defaults to (true, true)
+    /// for users who never changed their notification settings.
+    pub async fn get_notification_settings(&self, bot_id: i32, user_id: i64) -> Result<(bool, bool)> {
+        let row: Option<(bool, bool)> = sqlx::query_as(
+            "SELECT proposals_enabled, reports_enabled FROM notification_settings WHERE bot_id = $1 AND user_id = $2",
+        )
+        .bind(bot_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.unwrap_or((true, true)))
+    }
+
+    pub async fn set_proposals_notifications(
+        &self,
+        bot_id: i32,
+        user_id: i64,
+        enabled: bool,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO notification_settings (bot_id, user_id, proposals_enabled)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (bot_id, user_id) DO UPDATE SET proposals_enabled = $3",
+        )
+        .bind(bot_id)
+        .bind(user_id)
+        .bind(enabled)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn set_reports_notifications(
+        &self,
+        bot_id: i32,
+        user_id: i64,
+        enabled: bool,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO notification_settings (bot_id, user_id, reports_enabled)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (bot_id, user_id) DO UPDATE SET reports_enabled = $3",
+        )
+        .bind(bot_id)
+        .bind(user_id)
+        .bind(enabled)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }

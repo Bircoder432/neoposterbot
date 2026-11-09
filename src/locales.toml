@@ -3,18 +3,14 @@ welcome = """🤖 Welcome to the anonymous proposal bot!
 Just send your proposal, idea, or message here, and it will be anonymously reviewed by moderators.
 Your identity will be hidden - moderators will only see the content of your message.
 ❓ What you can send:
-• Text proposals
+• Text
 • Photos
 • Documents
-• Videos
-• Video notes
+• Videos and video notes
 • Audio and voice messages
 • Stickers
 Your proposal will be reviewed shortly!
-/nopostme for ban posting your username
-/allowpostme for allow posting tour username
-/cancel for quit from reply mode
-"""
+⚙️ Personal settings are available via the buttons below 👇"""
 owner_panel = """👑 Owner Panel
 Commands:
 /addadmin — generate invite link
@@ -109,15 +105,21 @@ choose_action = "Choose action:"
 reason_btn = "Reason"
 next_btn = "Next"
 ban_btn = "Ban"
-enter_rejection_reason = "Enter rejection reason:"
-enter_ban_reason = "Enter ban reason:"
+enter_rejection_reason = "✍️ Enter the rejection reason. The author of the proposal will see it:"
+enter_ban_reason = "✍️ Enter the ban reason. The banned user will see it:"
 enter_reason_callback = "✅ Enter reason"
 reason_sent = "✅ Reason sent."
 rejected_reason = "Your message was rejected. Reason: {reason}"
-new_proposal_notif = """📨 New proposal!
-💬 {text}
+new_proposal_notif = """🔔 <b>NEW PROPOSAL NOTIFICATION</b>
+
+A new proposal has arrived and is awaiting moderation.
+
+💬 <i>{text}</i>
 📁 Type: {media_type}
-/proposals"""
+⏰ Time: {time} UTC
+📊 Proposals in the moderation queue: {count}
+
+Press the button below to open the proposal 👇"""
 proposal_accepted = "✅ Your proposal has been accepted! It will be reviewed by moderators anonymously."
 reply_accepted = "✅ Your reply has been accepted!"
 error_sending_reply = "❌ Error sending reply."
@@ -139,8 +141,7 @@ Appeal code: {ban_id}"""
 user_banned_success = "✅ User banned."
 error_banning_user = "❌ Error banning user."
 reply_usage = "📝 Usage: /reply <post_ID>"
-send_reply_to_post = """✍️ Send your reply to the post.
-/cancel — exit reply mode."""
+send_reply_to_post = """✍️ Send your reply to the post as a single message."""
 invalid_reply_link = "❌ Invalid reply link."
 post_not_found = "❌ Post not found."
 reply_link_text = "💬 Reply"
@@ -215,14 +216,19 @@ field_bots = "Bots"
 field_username = "Username"
 field_channel = "Channel"
 report_link_text = "⚠️ Report"
-send_report_to_post = """⚠️ Send your report. Describe what's wrong with this post.
-/cancel — cancel."""
+send_report_to_post = """⚠️ Describe what is wrong with this post and send it as a single message."""
 report_accepted = "✅ Your report has been submitted. Moderators will review it."
 report_empty_reason = "❌ Please send a text description of the problem."
 no_pending_reports = "✅ No pending reports."
-new_report_notif = """⚠️ New report!
-📝 Reason: {reason}
-/reports"""
+new_report_notif = """🔔 <b>NEW REPORT NOTIFICATION</b>
+
+A new report has arrived and is awaiting review.
+
+📝 Reason: <i>{reason}</i>
+⏰ Time: {time} UTC
+📊 Unprocessed reports: {count}
+
+Press the button below to open the report 👇"""
 report_display = """⚠️ <b>Report #{id}</b>
 📅 {date}
 📝 Reason: {reason}
@@ -282,23 +288,79 @@ proposal_canceled_msg = "✅ Proposal canceled."
 proposal_canceled_success = "❌ Your proposal has been canceled and removed from the queue."
 proposal_already_processed = "⏳ The proposal is already being processed by moderators or has been removed."
 
+# --- UI/UX stage 1: notifications, menus, buttons ---
+notif_moderate_btn = "📨 Moderate"
+notif_open_report_btn = "⚠️ Open report"
+notif_settings_btn = "🔕 Notifications"
+notif_settings_title = "🔔 <b>Notification settings</b>\n\nTap an item to toggle that notification on or off:"
+notif_proposals_on = "📨 New proposals: ✅ ON"
+notif_proposals_off = "📨 New proposals: ❌ OFF"
+notif_reports_on = "⚠️ New reports: ✅ ON"
+notif_reports_off = "⚠️ New reports: ❌ OFF"
+notif_toggled_on = "✅ Notifications enabled."
+notif_toggled_off = "🔕 Notifications disabled."
+menu_owner_title = """👑 <b>Owner Panel</b>
+
+Choose an action - all commands also still work:"""
+menu_mod_title = """🛠️ <b>Moderator Panel</b>
+
+Choose an action - all commands also still work:"""
+menu_btn_proposals = "📨 Proposals"
+menu_btn_reports = "⚠️ Reports"
+menu_btn_admins = "👥 Moderators"
+menu_btn_addadmin = "🔗 Invite mod."
+menu_btn_banned = "🚫 Bans"
+menu_btn_pardon = "⚖️ Pardon ban"
+menu_btn_blacklist = "⛔ Username blacklist"
+menu_btn_audit = "📋 Audit log"
+menu_btn_reply = "✍️ Reply to post"
+menu_btn_addreplies = "➕ Reply buttons"
+menu_btn_lang = "🌐 Language"
+menu_btn_notif = "🔔 Notifications"
+back_to_menu_btn = "⬅️ Menu"
+lang_choose_title = "🌐 <b>Choose the bot language:</b>"
+cancel_flow_btn = "❌ Cancel"
+flow_cancelled_msg = "❌ Cancelled."
+user_nopostme_btn = "⛔ Block posts with my username"
+user_allowpostme_btn = "✅ Allow posts with my username"
+pardon_prompt = """⚖️ <b>Pardon a ban</b>
+
+Send the ban code (BAN-ID) that should be deactivated.
+Example: <code>BAN-A1B2C3</code>"""
+reply_id_prompt = """✍️ <b>Reply to a post</b>
+
+Send the ID of the channel post you want to reply to.
+Example: <code>123</code>"""
+addreplies_prompt = """➕ <b>Add reply buttons to a post</b>
+
+Send the link to the channel post.
+Example: <code>https://t.me/c/1234567890/5</code>"""
+reply_id_invalid = "❌ Invalid post ID. Send a number, for example: 123"
+pardon_ban_btn = "⚖️ Pardon {ban_id}"
+skip_btn = "⏭ Skip"
+skipped_msg = "⏭ Proposal skipped."
+media_label_text = "💬 Text"
+media_label_photo = "🖼 Photo"
+media_label_document = "📄 Document"
+media_label_video = "🎥 Video"
+media_label_video_note = "📹 Video note"
+media_label_audio = "🎵 Audio"
+media_label_voice = "🎤 Voice message"
+media_label_sticker = "😊 Sticker"
+
 [ru]
 welcome = """🤖 Добро пожаловать в анонимную предложку!
 Просто отправьте сюда ваше предложение, идею или сообщение, и оно будет анонимно рассмотрено модераторами.
 Ваша личность будет скрыта - модераторы увидят только содержание вашего сообщения.
 ❓ Что можно отправлять:
-• Текстовые предложения
+• Текст
 • Фотографии
 • Документы
-• Видео
-• Кружочки (видеосообщения)
+• Видео и кружочки (видеосообщения)
 • Аудио и голосовые сообщения
 • Стикеры
 Ваше предложение будет рассмотрено в ближайшее время!
-/nopostme для запрета на пост вашего юзернейм
-/allowpostme чтобы снова разрешить постить ваш юзернейм
-/cancel для выхода из режима ответа
-"""
+⚙️ Личные настройки доступны по кнопкам ниже 👇"""
 owner_panel = """👑 Панель владельца
 Команды:
 /addadmin — создать пригласительную ссылку
@@ -393,15 +455,21 @@ choose_action = "Выберите действие:"
 reason_btn = "Причина"
 next_btn = "Далее"
 ban_btn = "Бан"
-enter_rejection_reason = "Введите причину отказа:"
-enter_ban_reason = "Введите причину блокировки:"
+enter_rejection_reason = "✍️ Введите причину отказа. Автор предложения увидит её:"
+enter_ban_reason = "✍️ Введите причину блокировки. Заблокированный пользователь увидит её:"
 enter_reason_callback = "✅ Введите причину"
 reason_sent = "✅ Причина отправлена."
 rejected_reason = "Ваше сообщение отклонено по причине: {reason}"
-new_proposal_notif = """📨 Новое предложение!
-💬 {text}
+new_proposal_notif = """🔔 <b>УВЕДОМЛЕНИЕ О НОВОМ ПРЕДЛОЖЕНИИ</b>
+
+В предложку поступило новое предложение и ждёт модерации.
+
+💬 <i>{text}</i>
 📁 Тип: {media_type}
-/proposals"""
+⏰ Время: {time} UTC
+📊 Предложений в очереди на модерацию: {count}
+
+Чтобы открыть предложение, нажмите кнопку ниже 👇"""
 proposal_accepted = "✅ Ваше предложение принято! Оно будет рассмотрено модераторами анонимно."
 reply_accepted = "✅ Ваш ответ принят!"
 error_sending_reply = "❌ Ошибка при отправке ответа."
@@ -423,8 +491,7 @@ user_banned_appeal = """🚫 Вы заблокированы.
 user_banned_success = "✅ Пользователь заблокирован."
 error_banning_user = "❌ Ошибка при блокировке."
 reply_usage = "📝 Использование: /reply <ID_поста>"
-send_reply_to_post = """✍️ Отправьте ваш ответ на пост.
-/cancel — выход из режима ответа."""
+send_reply_to_post = """✍️ Отправьте ваш ответ на пост одним сообщением."""
 invalid_reply_link = "❌ Неверная ссылка для ответа."
 post_not_found = "❌ Пост не найден."
 reply_link_text = "💬 Ответить"
@@ -499,14 +566,19 @@ field_bots = "Ботов"
 field_username = "Юзернейм"
 field_channel = "Канал"
 report_link_text = "⚠️ Пожаловаться"
-send_report_to_post = """⚠️ Отправьте вашу жалобу. Опишите, что не так с этим постом.
-/cancel — отмена."""
+send_report_to_post = """⚠️ Опишите, что не так с этим постом, и отправьте одним сообщением."""
 report_accepted = "✅ Ваша жалоба отправлена. Модераторы её рассмотрят."
 report_empty_reason = "❌ Пожалуйста, отправьте текстовое описание проблемы."
 no_pending_reports = "✅ Нет ожидающих жалоб."
-new_report_notif = """⚠️ Новая жалоба!
-📝 Причина: {reason}
-/reports"""
+new_report_notif = """🔔 <b>УВЕДОМЛЕНИЕ О НОВОЙ ЖАЛОБЕ</b>
+
+На пост в канале поступила новая жалоба и ждёт рассмотрения.
+
+📝 Причина: <i>{reason}</i>
+⏰ Время: {time} UTC
+📊 Необработанных жалоб: {count}
+
+Чтобы открыть жалобу, нажмите кнопку ниже 👇"""
 report_display = """⚠️ <b>Жалоба #{id}</b>
 📅 {date}
 📝 Причина: {reason}
@@ -565,3 +637,63 @@ cancel_proposal_btn = "❌ Отменить"
 proposal_canceled_msg = "✅ Предложение отменено."
 proposal_canceled_success = "❌ Ваше предложение было отменено и удалено из очереди."
 proposal_already_processed = "⏳ Предложение уже обрабатывается модераторами или было удалено."
+
+# --- UI/UX stage 1: notifications, menus, buttons ---
+notif_moderate_btn = "📨 Модерировать"
+notif_open_report_btn = "⚠️ Открыть жалобу"
+notif_settings_btn = "🔕 Уведомления"
+notif_settings_title = "🔔 <b>Настройки уведомлений</b>\n\nНажимайте на пункты, чтобы включать и выключать уведомления:"
+notif_proposals_on = "📨 Новые предложения: ✅ ВКЛ"
+notif_proposals_off = "📨 Новые предложения: ❌ ВЫКЛ"
+notif_reports_on = "⚠️ Новые жалобы: ✅ ВКЛ"
+notif_reports_off = "⚠️ Новые жалобы: ❌ ВЫКЛ"
+notif_toggled_on = "✅ Уведомления включены."
+notif_toggled_off = "🔕 Уведомления выключены."
+menu_owner_title = """👑 <b>Панель владельца</b>
+
+Выберите действие - команды также продолжают работать:"""
+menu_mod_title = """🛠️ <b>Панель модератора</b>
+
+Выберите действие - команды также продолжают работать:"""
+menu_btn_proposals = "📨 Предложения"
+menu_btn_reports = "⚠️ Жалобы"
+menu_btn_admins = "👥 Модераторы"
+menu_btn_addadmin = "🔗 Пригласить мод."
+menu_btn_banned = "🚫 Баны"
+menu_btn_pardon = "⚖️ Снять бан"
+menu_btn_blacklist = "⛔ ЧС юзернеймов"
+menu_btn_audit = "📋 Журнал действий"
+menu_btn_reply = "✍️ Ответ на пост"
+menu_btn_addreplies = "➕ Кнопки ответа"
+menu_btn_lang = "🌐 Язык"
+menu_btn_notif = "🔔 Уведомления"
+back_to_menu_btn = "⬅️ В меню"
+lang_choose_title = "🌐 <b>Выберите язык бота:</b>"
+cancel_flow_btn = "❌ Отменить"
+flow_cancelled_msg = "❌ Отменено."
+user_nopostme_btn = "⛔ Запретить посты с моим юзернеймом"
+user_allowpostme_btn = "✅ Разрешить посты с моим юзернеймом"
+pardon_prompt = """⚖️ <b>Снятие бана</b>
+
+Отправьте код бана (BAN-ID), который нужно деактивировать.
+Например: <code>BAN-A1B2C3</code>"""
+reply_id_prompt = """✍️ <b>Ответ на пост</b>
+
+Отправьте ID поста в канале, на который хотите ответить.
+Например: <code>123</code>"""
+addreplies_prompt = """➕ <b>Кнопки ответа на пост</b>
+
+Отправьте ссылку на пост в канале.
+Например: <code>https://t.me/c/1234567890/5</code>"""
+reply_id_invalid = "❌ Неверный ID поста. Отправьте число, например: 123"
+pardon_ban_btn = "⚖️ Снять {ban_id}"
+skip_btn = "⏭ Пропустить"
+skipped_msg = "⏭ Предложение пропущено."
+media_label_text = "💬 Текст"
+media_label_photo = "🖼 Фото"
+media_label_document = "📄 Документ"
+media_label_video = "🎥 Видео"
+media_label_video_note = "📹 Видеосообщение"
+media_label_audio = "🎵 Аудио"
+media_label_voice = "🎤 Голосовое сообщение"
+media_label_sticker = "😊 Стикер"

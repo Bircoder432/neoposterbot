@@ -11,6 +11,7 @@ use crate::db::repository::Database;
 mod admins;
 mod callbacks;
 mod commands;
+mod menu;
 mod proposals;
 mod reports;
 mod setup;
@@ -127,6 +128,15 @@ async fn dispatch_message(bot: &Bot, msg: &Message, state: &WorkerState) -> R {
             }
             "ban_reason" => {
                 return proposals::handle_send_ban_reason(bot, msg, state, &entry).await;
+            }
+            "await_pardon" => {
+                return menu::handle_pardon_input(bot, msg, state).await;
+            }
+            "await_reply_id" => {
+                return menu::handle_reply_id_input(bot, msg, state).await;
+            }
+            "await_addreplies" => {
+                return menu::handle_addreplies_input(bot, msg, state).await;
             }
             _ => {
                 state.user_states.remove(&user_id);

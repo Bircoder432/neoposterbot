@@ -91,6 +91,16 @@ impl ProposalStore {
         Some(proposal)
     }
 
+    /// Number of proposals currently waiting in the moderation queue.
+    pub async fn pending_count(&self) -> usize {
+        self.inner.lock().await.pending.len()
+    }
+
+    /// Puts a previously active proposal at the end of the queue (skip).
+    pub async fn move_to_back(&self, proposal: Proposal) {
+        self.inner.lock().await.pending.push_back(proposal);
+    }
+
     pub async fn take_active(&self, id: u64) -> Option<Proposal> {
         self.inner.lock().await.active.remove(&id).map(|(p, _)| p)
     }

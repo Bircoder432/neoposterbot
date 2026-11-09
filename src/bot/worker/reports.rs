@@ -1,4 +1,6 @@
-use crate::bot::worker::WorkerState;
+use super::admins;
+use crate::bot::media::escape_html;
+use crate::bot::worker::{UserStateEntry, WorkerState};
 use crate::db::Database;
 use crate::hashing::hash_user_id;
 use crate::l10n;
@@ -47,18 +49,82 @@ pub(super) async fn handle_report_content(
     Ok(())
 }
 
+/// Puts a user into "report mode" (used by the report deep link).
+pub(super) async fn enter_report_mode(
+    bot: &Bot,
+    chat_id: ChatId,
+    user_id: i64,
+    state: &WorkerState,
+    channel_msg_id: i64,
+    lang: Locale,
+) -> R {
+    state.user_states.insert(
+        user_id,
+        UserStateEntry {
+            state: "report_mode".to_string(),
+            temp_target_id: channel_msg_id,
+            proposal_id: 0,
+        },
+    );
+    let kb = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+        l10n!(lang, "cancel_flow_btn"),
+        "flowcancel",
+    )]]);
+    bot.send_message(chat_id, l10n!(lang, "send_report_to_post"))
+        .reply_markup(kb)
+        .await?;
+    Ok(())
+}
+
 pub(super) async fn notify_admins_about_report(
     bot: &Bot,
     state: &WorkerState,
     reason: &str,
     lang: Locale,
 ) {
-    let admins = state.db.get_admins(state.bot_id).await.unwrap_or_default();
-    let notif = l10n!(lang, "new_report_notif", reason = reason);
-    for admin in admins {
-        if !admin.frozen {
-            let _ = bot.send_message(ChatId(admin.user_id), &notif).await;
+    let recipients = admins::notification_recipients(state).await;
+    if recipients.is_empty() {
+        return;
+    }
+
+    let count = state
+        .db
+        .count_pending_reports(state.bot_id)
+        .await
+        .unwrap_or(1);
+    let escaped_reason = escape_html(reason);
+    let time = chrono::Utc::now().format("%d.%m.%Y %H:%M").to_string();
+    let notif = l10n!(
+        lang,
+        "new_report_notif",
+        reason = escaped_reason,
+        time = time,
+        count = count
+    );
+    let kb = InlineKeyboardMarkup::new(vec![
+        vec![InlineKeyboardButton::callback(
+            l10n!(lang, "notif_open_report_btn"),
+            "menu_reports",
+        )],
+        vec![InlineKeyboardButton::callback(
+            l10n!(lang, "notif_settings_btn"),
+            "menu_notif",
+        )],
+    ]);
+    for user_id in recipients {
+        let (_, reports_on) = state
+            .db
+            .get_notification_settings(state.bot_id, user_id)
+            .await
+            .unwrap_or((true, true));
+        if !reports_on {
+            continue;
         }
+        let _ = bot
+            .send_message(ChatId(user_id), &notif)
+            .parse_mode(ParseMode::Html)
+            .reply_markup(kb.clone())
+            .await;
     }
 }
 
@@ -70,7 +136,12 @@ pub(super) async fn show_next_report(
 ) -> R {
     let reports = state.db.get_pending_reports(state.bot_id).await?;
     if reports.is_empty() {
+        let kb = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+            l10n!(lang, "back_to_menu_btn"),
+            "menu_main",
+        )]]);
         bot.send_message(chat_id, l10n!(lang, "no_pending_reports"))
+            .reply_markup(kb)
             .await?;
         return Ok(());
     }
@@ -93,7 +164,7 @@ pub(super) async fn show_next_report(
         "report_display",
         id = report.id,
         date = date_str,
-        reason = report.reason,
+        reason = escape_html(&report.reason),
         link = post_link
     );
     let kb = InlineKeyboardMarkup::new(vec![
@@ -115,6 +186,10 @@ pub(super) async fn show_next_report(
                 format!("report_ban_{}", report.id),
             ),
         ],
+        vec![InlineKeyboardButton::callback(
+            l10n!(lang, "back_to_menu_btn"),
+            "menu_main",
+        )],
     ]);
     bot.send_message(chat_id, text)
         .parse_mode(ParseMode::Html)
